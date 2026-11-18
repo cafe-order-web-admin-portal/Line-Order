@@ -39,14 +39,13 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 <header>
   <div class="top"><div class="logo">A</div><div><div class="brand">Café Amazon</div><div class="sub">Order Online · สั่งง่าย รับสะดวก</div></div></div>
   <div class="branch">สาขา ตลาดทวีสมาน · ภูเก็ต</div><div class="hero">เติมความสดชื่นในแบบคุณ ☕</div>
-  <div class="header-actions"><button id="track-button">ติดตามคำสั่งซื้อ</button><button id="refresh-button">รีเฟรชเมนู</button></div>
+  <div class="header-actions"><button id="refresh-button">รีเฟรชเมนู</button></div>
 </header>
 <main>
   <p class="status" id="status">กำลังเชื่อมต่อระบบ…</p>
   <div class="receipt" id="receipt"></div>
   <div class="section-title">เลือกหมวดหมู่</div><div class="chips" id="categories"><button class="chip active" data-cat="all">ทั้งหมด</button></div>
   <div class="section-title">เมนู Café Amazon</div><div class="grid" id="products"><div class="empty">กำลังโหลดเมนู…</div></div>
-  <section id="tracking-section" hidden><div class="section-title">คำสั่งซื้อของฉัน</div><div class="tracking-tools"><span class="hint">สถานะจะอัปเดตอัตโนมัติทุก 15 วินาที</span><button id="tracking-refresh" class="tracking-refresh">↻ อัปเดตตอนนี้</button></div><div id="tracking-list" class="tracking-list"><div class="empty">กดติดตามคำสั่งซื้อเพื่อดูสถานะ</div></div></section>
 </main>
 <div class="location-onboarding" id="location-onboarding" role="dialog" aria-modal="true" aria-labelledby="location-onboarding-title"><div class="location-onboarding-card"><div class="location-onboarding-icon">📍</div><h2 id="location-onboarding-title">อนุญาตให้ร้านใช้ตำแหน่งของคุณไหม?</h2><p>ใช้ตำแหน่งเพื่อช่วยให้พนักงานติดตามการรับสินค้าและประสานงานออเดอร์ได้สะดวกขึ้น ระบบจะเริ่มแชร์ตำแหน่งเมื่อมีคำสั่งซื้อที่ยังดำเนินการอยู่เท่านั้น</p><div class="location-onboarding-actions"><button class="location-allow" id="location-allow">อนุญาตตำแหน่ง</button><button class="location-later" id="location-later">ไว้ภายหลัง</button></div><p class="location-onboarding-foot">คุณสามารถเลือกไม่อนุญาตได้ และยังสั่งเครื่องดื่มได้ตามปกติ</p></div></div><div class="cartbar"><div><div class="cartmeta" id="cart-count">0 รายการ</div><div class="carttotal" id="cart-total">฿0.00</div></div><button class="checkout" id="checkout" disabled>ดูตะกร้า</button></div>
 
@@ -345,17 +344,15 @@ async function stopLocationSharing(orderId){
   }catch(e){alert(e.message||'ไม่สามารถหยุดแชร์ตำแหน่งได้');}
 }
 
-async function loadMyOrders(scroll=true){
+async function loadMyOrders(){
   if(trackingLoading)return;
-  const token=getLineIdToken();if(!token){setStatus('เซสชัน LINE หมดอายุ กรุณารีเฟรชหน้าเพื่อเข้าสู่ระบบอีกครั้ง');return;}
+  const token=getLineIdToken();if(!token)return;
   trackingLoading=true;
-  $('tracking-section').hidden=false;$('tracking-list').innerHTML='<div class="empty">กำลังโหลดประวัติคำสั่งซื้อ…</div>';
   try{
     const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:token,limit:10})});
     const data=await res.json().catch(()=>({error:'invalid_response'}));
     if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดประวัติได้');
-    const orders=data.orders||[];
-    lastCustomerOrders=orders;
+    const orders=data.orders||[];lastCustomerOrders=orders;
     const resumableOrder=orders.find(o=>o.location_share?.is_sharing&&!['completed','cancelled'].includes(o.order_status));
     if(!activeLocationOrderId&&resumableOrder&&!document.hidden){
       startLocationSharing(resumableOrder.order_id,true,true).catch(e=>console.info('Location resume skipped:',e.message));
@@ -367,16 +364,7 @@ async function loadMyOrders(scroll=true){
         locationWatchId=null;activeLocationOrderId=null;lastSentLocation=null;lastLocationSentAt=0;
       }
     }
-    $('tracking-list').innerHTML=orders.length?orders.map(order=>{
-      const items=(order.items||[]).map(item=>'<div>'+esc(item.product_name)+' × '+item.quantity+'</div>').join('');
-      const optionHtml=(order.items||[]).map(item=>{
-        const options=Array.isArray(item.selected_options)?item.selected_options.map(option=>option.option_name).filter(Boolean).join(', '):'';
-        return options?'<small>'+esc(options)+'</small>':'';
-      }).join('');
-      return '<article class="tracking-card"><div class="tracking-head"><span>'+esc(order.order_number)+'</span><span class="status-pill">'+esc(statusLabel[order.order_status]||order.order_status)+'</span></div><small>สั่งเมื่อ '+new Date(order.created_at).toLocaleString('th-TH')+'</small>'+renderCustomerTimeline(order)+'<div style="margin-top:8px">'+items+optionHtml+'</div><div class="total-row"><span>ยอดรวม</span><span>'+money(order.total_amount)+'</span></div>'+renderTrackingHistory(order.status_history)+renderLocationShare(order)+'<div class="tracking-foot">อัปเดตล่าสุด '+new Date(order.updated_at||order.created_at).toLocaleString('th-TH')+'</div></article>';
-    }).join(''):'<div class="empty">ยังไม่มีประวัติคำสั่งซื้อ</div>';
-    if(scroll)$('tracking-section').scrollIntoView({behavior:'smooth',block:'start'});
-  }catch(e){$('tracking-list').innerHTML='<div class="empty">'+esc(e.message)+'</div>';}
+  }catch(e){console.info('Order location sync:',e.message);}
   finally{trackingLoading=false;}
 }
 $('categories').addEventListener('click',e=>{const b=e.target.closest('[data-cat]');if(!b)return;activeCategory=b.dataset.cat;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderProducts();});
@@ -384,8 +372,6 @@ $('products').addEventListener('click',e=>{const b=e.target.closest('[data-add]'
 $('add-configured').onclick=()=>{const ids=collectOptions();if(ids!==null)addConfiguredProduct(ids);};
 $('checkout').onclick=()=>{renderCart();showModal('cart-modal');};
 $('confirm-order').onclick=submitOrder;
-$('track-button').onclick=()=>loadMyOrders(true);
-$('tracking-refresh').onclick=()=>loadMyOrders(false);
 // First-login consent triggers the native location prompt only after the customer taps Allow.
 $('refresh-button').onclick=loadMenu;
 document.addEventListener('click',e=>{
@@ -395,7 +381,7 @@ document.addEventListener('click',e=>{
 });
 document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)hideModal(m.id);}));
 start();
-setInterval(()=>{if(!document.hidden&&!$('tracking-section').hidden)loadMyOrders(false);},15000);
+setInterval(()=>{if(!document.hidden&&getLineIdToken())loadMyOrders();},30000);
 
 </script>
 </body>
