@@ -24,6 +24,15 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 .order-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:15px 0 8px}.progress-step{position:relative;text-align:center;color:#9aa19a;font-size:10px;line-height:1.35;padding:0 2px}.progress-step:not(:last-child):after{content:'';position:absolute;left:58%;top:8px;width:84%;height:2px;background:#e3e9e3;z-index:0}.progress-dot{width:17px;height:17px;border-radius:50%;background:#fff;border:2px solid #d5ddd5;margin:0 auto 6px;position:relative;z-index:1}.progress-step.done{color:var(--green)}.progress-step.done .progress-dot{background:var(--green);border-color:var(--green)}.progress-step.done:not(:last-child):after{background:#8cbea0}.progress-time{font-size:9px;color:var(--muted);display:block;margin-top:3px}.tracking-history{border-left:2px solid #e5ebe5;margin:12px 0 5px 7px;padding-left:13px;display:grid;gap:8px}.tracking-event{position:relative;font-size:11px;color:var(--muted)}.tracking-event:before{content:'';position:absolute;left:-19px;top:4px;width:8px;height:8px;border-radius:50%;background:#78aa88}.tracking-event b{font-size:12px;color:var(--ink)}.cancelled-note{padding:10px 12px;background:#fff0ee;color:#a33d32;border-radius:10px;font-size:12px;margin-top:10px}.tracking-foot{font-size:10px;color:var(--muted);margin-top:10px}
 
 @media(min-width:600px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.photo{height:145px}.modal{align-items:center;justify-content:center}.sheet{max-width:520px;border-radius:20px}}
+
+.location-box{margin-top:12px;padding:12px;border:1px solid #dce8de;background:#f4faf5;border-radius:12px}
+.location-title{font-size:13px;font-weight:600;color:var(--green);margin-bottom:5px}
+.location-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:9px}
+.location-actions{display:flex;gap:8px;flex-wrap:wrap}
+.location-actions button{border-radius:10px;padding:9px 12px;font:600 12px 'IBM Plex Sans Thai',sans-serif}
+.location-start{background:var(--green);color:#fff;border:0}.location-stop{background:#fff0ee;color:#a33d32;border:1px solid #efd2cc}
+.location-state{font-size:11px;margin-top:8px;color:var(--muted)}
+
 </style>
 </head>
 <body>
@@ -51,11 +60,13 @@ const LIFF_ID='2012679988-ORHhLD7I';
 const BRANCH_CODE='PKT001';
 const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
 const TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders';
+const LOCATION_FUNCTION_URL='https://ytxbnqosenolojiifeikf.supabase.co/functions/v1/share-customer-location';
 const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{};
 const db=(cfg.url&&cfg.publishableKey&&window.supabase)?window.supabase.createClient(cfg.url,cfg.publishableKey):null;
 let profile=null,allProducts=[],activeCategory='all',cart=new Map();
 let optionGroups=[],optionChoices=[],productGroupLinks=[],productOptionLinks=[],currentProduct=null;
 let activeRequestId=null;
+let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
 const $=id=>document.getElementById(id);
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -204,6 +215,75 @@ function renderTrackingHistory(history){
   return '<div class="tracking-history">'+history.map(event=>'<div class="tracking-event"><b>'+esc(statusLabel[event.new_status]||event.new_status)+'</b><br>'+new Date(event.created_at).toLocaleString('th-TH')+'</div>').join('')+'</div>';
 }
 let trackingLoading=false;
+function renderLocationShare(order){
+  const terminal=['completed','cancelled'].includes(order.order_status);
+  const share=order.location_share||{};
+  if(terminal)return '<div class="location-box"><div class="location-title">การแชร์ตำแหน่ง</div><div class="location-state">คำสั่งซื้อปิดแล้ว ระบบหยุดแชร์ตำแหน่ง</div></div>';
+  const updated=share.last_updated_at?new Date(share.last_updated_at):null;
+  const ageSeconds=updated?Math.max(0,(Date.now()-updated.getTime())/1000):null;
+  const fresh=share.is_sharing&&ageSeconds!==null&&ageSeconds<120;
+  const state=share.is_sharing
+    ? (fresh?'กำลังแชร์ตำแหน่ง · อัปเดต '+updated.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'แชร์ตำแหน่งไว้ · จุดล่าสุด '+(updated?updated.toLocaleString('th-TH'):'ไม่ทราบเวลา'))
+    : 'ยังไม่ได้แชร์ตำแหน่ง';
+  return '<div class="location-box"><div class="location-title">📍 แชร์ตำแหน่งให้ร้าน</div><div class="location-note">เมื่อกดแชร์ อุปกรณ์จะส่งพิกัดให้ร้านเป็นระยะขณะที่เปิดหน้า LIFF และอนุญาต Location เท่านั้น พิกัดจะแสดงในแผนที่เฉพาะพนักงาน ลูกค้าจะไม่เห็นแผนที่ติดตามของร้าน และคุณหยุดแชร์ได้ทุกเมื่อ</div><div class="location-actions"><button class="location-start" data-share-location="'+esc(order.order_id)+'">'+(share.is_sharing?'แชร์ตำแหน่งต่อ / อัปเดต':'แชร์ตำแหน่งของฉัน')+'</button>'+(share.is_sharing?'<button class="location-stop" data-stop-location="'+esc(order.order_id)+'">หยุดแชร์</button>':'')+'</div><div class="location-state">'+esc(state)+(share.accuracy_m!=null?' · ความแม่นยำประมาณ '+Math.round(Number(share.accuracy_m))+' ม.':'')+'</div></div>';
+}
+function getCurrentPosition(){
+  return new Promise((resolve,reject)=>{
+    if(!navigator.geolocation)return reject(new Error('อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง'));
+    navigator.geolocation.getCurrentPosition(resolve,error=>{
+      const messages={1:'ยังไม่ได้อนุญาตให้เข้าถึงตำแหน่ง กรุณาอนุญาต Location ในการตั้งค่าเบราว์เซอร์',2:'ไม่สามารถระบุตำแหน่งได้ กรุณาลองอีกครั้ง',3:'หมดเวลารอพิกัด กรุณาลองอีกครั้ง'};
+      reject(new Error(messages[error.code]||'ไม่สามารถอ่านตำแหน่งได้'));
+    },{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
+  });
+}
+async function postLocation(action,orderId,position=null){
+  const token=liff.getIDToken();if(!token)throw new Error('ไม่พบ LINE ID Token กรุณาเปิด LIFF ใหม่');
+  const coords=position?.coords;
+  const response=await fetch(LOCATION_FUNCTION_URL,{
+    method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
+    body:JSON.stringify({id_token:token,order_id:orderId,action,latitude:coords?.latitude,longitude:coords?.longitude,accuracy_m:coords?.accuracy})
+  });
+  const data=await response.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
+  if(!response.ok||data.success!==true)throw new Error(data.error||'บันทึกตำแหน่งไม่สำเร็จ');
+  return data;
+}
+function distanceMeters(a,b){
+  if(!a||!b)return Infinity;const rad=n=>n*Math.PI/180;
+  const dLat=rad(b.latitude-a.latitude),dLon=rad(b.longitude-a.longitude);
+  const x=Math.sin(dLat/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(dLon/2)**2;
+  return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+async function startLocationSharing(orderId){
+  if(!confirm('อนุญาตให้ Café Amazon ตลาดทวีสมานเห็นตำแหน่งของคุณสำหรับคำสั่งซื้อนี้หรือไม่?\nระบบจะอัปเดตขณะเปิดหน้า LIFF ไว้ และคุณหยุดแชร์ได้ทุกเมื่อ'))return;
+  try{
+    if(!liff.isLoggedIn()){liff.login({redirectUri:window.location.href});return;}
+    const position=await getCurrentPosition();
+    if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);
+    if(activeLocationOrderId&&activeLocationOrderId!==orderId){await postLocation('stop',activeLocationOrderId).catch(()=>{});}
+    const result=await postLocation('start',orderId,position);
+    activeLocationOrderId=orderId;lastLocationSentAt=Date.now();lastSentLocation={latitude:position.coords.latitude,longitude:position.coords.longitude};
+    locationWatchId=navigator.geolocation.watchPosition(async next=>{
+      if(locationSending||activeLocationOrderId!==orderId)return;
+      const coords={latitude:next.coords.latitude,longitude:next.coords.longitude};
+      const elapsed=Date.now()-lastLocationSentAt;
+      if(elapsed<20000&&distanceMeters(lastSentLocation,coords)<40)return;
+      locationSending=true;
+      try{await postLocation('update',orderId,next);lastLocationSentAt=Date.now();lastSentLocation=coords;}
+      catch(e){console.warn('Location update:',e.message);}
+      finally{locationSending=false;}
+    },e=>console.warn('Geolocation watch:',e.message),{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
+    await loadMyOrders(false);
+    alert('เริ่มแชร์ตำแหน่งให้ร้านแล้วครับ\nพิกัดล่าสุดถูกส่งเรียบร้อย');
+  }catch(e){alert(e.message||'ไม่สามารถเริ่มแชร์ตำแหน่งได้');}
+}
+async function stopLocationSharing(orderId){
+  try{
+    await postLocation('stop',orderId);
+    if(activeLocationOrderId===orderId){if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;activeLocationOrderId=null;lastSentLocation=null;lastLocationSentAt=0;}
+    await loadMyOrders(false);
+  }catch(e){alert(e.message||'ไม่สามารถหยุดแชร์ตำแหน่งได้');}
+}
+
 async function loadMyOrders(scroll=true){
   if(trackingLoading)return;
   if(!liff.isLoggedIn()){liff.login({redirectUri:window.location.href});return;}
@@ -215,13 +295,20 @@ async function loadMyOrders(scroll=true){
     const data=await res.json().catch(()=>({error:'invalid_response'}));
     if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดประวัติได้');
     const orders=data.orders||[];
+    if(activeLocationOrderId){
+      const activeOrder=orders.find(o=>String(o.order_id)===String(activeLocationOrderId));
+      if(!activeOrder||['completed','cancelled'].includes(activeOrder.order_status)){
+        if(locationWatchId!==null&&navigator.geolocation)navigator.geolocation.clearWatch(locationWatchId);
+        locationWatchId=null;activeLocationOrderId=null;lastSentLocation=null;lastLocationSentAt=0;
+      }
+    }
     $('tracking-list').innerHTML=orders.length?orders.map(order=>{
       const items=(order.items||[]).map(item=>'<div>'+esc(item.product_name)+' × '+item.quantity+'</div>').join('');
       const optionHtml=(order.items||[]).map(item=>{
         const options=Array.isArray(item.selected_options)?item.selected_options.map(option=>option.option_name).filter(Boolean).join(', '):'';
         return options?'<small>'+esc(options)+'</small>':'';
       }).join('');
-      return '<article class="tracking-card"><div class="tracking-head"><span>'+esc(order.order_number)+'</span><span class="status-pill">'+esc(statusLabel[order.order_status]||order.order_status)+'</span></div><small>สั่งเมื่อ '+new Date(order.created_at).toLocaleString('th-TH')+'</small>'+renderCustomerTimeline(order)+'<div style="margin-top:8px">'+items+optionHtml+'</div><div class="total-row"><span>ยอดรวม</span><span>'+money(order.total_amount)+'</span></div>'+renderTrackingHistory(order.status_history)+'<div class="tracking-foot">อัปเดตล่าสุด '+new Date(order.updated_at||order.created_at).toLocaleString('th-TH')+'</div></article>';
+      return '<article class="tracking-card"><div class="tracking-head"><span>'+esc(order.order_number)+'</span><span class="status-pill">'+esc(statusLabel[order.order_status]||order.order_status)+'</span></div><small>สั่งเมื่อ '+new Date(order.created_at).toLocaleString('th-TH')+'</small>'+renderCustomerTimeline(order)+'<div style="margin-top:8px">'+items+optionHtml+'</div><div class="total-row"><span>ยอดรวม</span><span>'+money(order.total_amount)+'</span></div>'+renderTrackingHistory(order.status_history)+renderLocationShare(order)+'<div class="tracking-foot">อัปเดตล่าสุด '+new Date(order.updated_at||order.created_at).toLocaleString('th-TH')+'</div></article>';
     }).join(''):'<div class="empty">ยังไม่มีประวัติคำสั่งซื้อ</div>';
     if(scroll)$('tracking-section').scrollIntoView({behavior:'smooth',block:'start'});
   }catch(e){$('tracking-list').innerHTML='<div class="empty">'+esc(e.message)+'</div>';}
@@ -234,6 +321,7 @@ $('checkout').onclick=()=>{renderCart();showModal('cart-modal');};
 $('confirm-order').onclick=submitOrder;
 $('track-button').onclick=()=>loadMyOrders(true);
 $('tracking-refresh').onclick=()=>loadMyOrders(false);
+$('tracking-list').addEventListener('click',e=>{const start=e.target.closest('[data-share-location]');if(start){startLocationSharing(start.dataset.shareLocation);return;}const stop=e.target.closest('[data-stop-location]');if(stop){stopLocationSharing(stop.dataset.stopLocation);}});
 $('refresh-button').onclick=loadMenu;
 document.addEventListener('click',e=>{
   const close=e.target.closest('[data-close]');if(close){hideModal(close.dataset.close);return;}
