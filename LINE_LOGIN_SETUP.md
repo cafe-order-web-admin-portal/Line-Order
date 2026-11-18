@@ -1,32 +1,49 @@
-# LINE Login deployment checklist
+# LINE LIFF customer login setup
 
-This project uses the existing LINE Login channel **2012679988**. Do not create a replacement channel.
-
-## Supabase Edge Function secrets
-
-In Supabase Dashboard → Project Settings → Edge Functions → Secrets, add:
-
-- `LINE_LOGIN_CHANNEL_SECRET`: the Channel secret from LINE Developers Console for channel 2012679988.
-- `LINE_LOGIN_REDIRECT_URI`: the exact callback URL used by the customer storefront. With standard GitHub Pages project hosting for the current repository, the expected URL is `https://cafe-order-web-admin-portal.github.io/Line-Order/cafe-amazon-liff-index.html`. Confirm the actual deployed page URL first; if Pages uses a custom domain or another path, use that exact full URL instead. The frontend derives the callback from `window.location.origin + window.location.pathname`.
-
-The existing `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` must remain configured server-side. Never place these secrets in `assets/config.js` or browser code.
+The customer storefront uses the existing LINE Login channel **2012679988** and its existing LIFF app ID **2012679988-ORHhLD7I**. Do not create a new channel or LIFF app.
 
 ## LINE Developers Console
 
-For the same LINE Login channel, add the exact value of `LINE_LOGIN_REDIRECT_URI` to the channel's Callback URL list. Enable the `openid` and `profile` scopes. The app uses Authorization Code Flow with PKCE (S256), state and nonce validation.
+In the existing LINE Login channel:
 
-## Publish and test
+1. Open the **LIFF** tab and confirm the existing LIFF app ID is `2012679988-ORHhLD7I`.
+2. Set the LIFF app Endpoint URL to the exact customer storefront page:
+   `https://cafe-order-web-admin-portal.github.io/Line-Order/cafe-amazon-liff-index.html`
+3. Enable the `openid` and `profile` scopes.
+4. Confirm the LIFF app is active.
 
-1. Enable GitHub Pages for this repository/branch and confirm the customer page is served at the intended HTTPS URL.
-2. Set `LINE_LOGIN_REDIRECT_URI` to that exact customer page URL and allowlist the same URL in LINE Developers Console.
-3. Confirm `LINE_LOGIN_CHANNEL_SECRET` is saved in Supabase Edge Function Secrets.
-4. Open the customer page in a private browser session. Confirm LINE-hosted login, customer row creation in `public.customers`, menu loading, test order, order tracking and explicit GPS sharing.
-5. Test GPS denial: ordering and tracking must continue to work without location access.
+## LINE Official Account Rich Menu
 
-## GPS behavior
+Set the order button's URI action to the LIFF URL:
 
-GPS is never requested on page load. A browser-native location permission prompt is triggered only after the customer presses a share-location button. Web geolocation updates are available only while the page remains open and active; background/closed-page tracking is not guaranteed.
+`https://liff.line.me/2012679988-ORHhLD7I`
 
-## Rollback
+Do not point the Rich Menu directly to the GitHub Pages URL or to the old OAuth authorization page. The LIFF URL is what launches the LIFF app in LINE.
 
-The previous LIFF frontend is retained on the default branch until this branch is reviewed and merged. Existing Edge Function CORS allowlists retain the previous origin and add the new requested origin.
+## Supabase
+
+The `line-login` Edge Function verifies the ID token issued by LIFF against LINE's verify endpoint using channel ID `2012679988`, then creates or updates the matching `customers` row. It uses the existing server-side `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` secrets.
+
+The old OAuth-only secrets `LINE_LOGIN_CHANNEL_SECRET` and `LINE_LOGIN_REDIRECT_URI` are no longer required by the LIFF flow. They may remain in Supabase Secrets; the function does not read them.
+
+## Customer login flow
+
+1. Customer taps the Rich Menu order action.
+2. LINE opens `https://liff.line.me/2012679988-ORHhLD7I`.
+3. LIFF SDK initializes in the customer page.
+4. In a LIFF browser, LINE provides the logged-in user's LIFF session. No separate email/password login page is shown.
+5. The browser sends the LIFF ID token to the `line-login` Edge Function.
+6. The Edge Function verifies the token with LINE and creates/updates `customers` without overwriting the customer's phone number.
+7. The storefront loads the menu and existing ordering/tracking features.
+
+The app requests `openid` and `profile`. The server verifies the ID token; it does not trust a user ID or profile object supplied separately by the browser.
+
+## Testing
+
+Test by opening the LIFF URL from the actual LINE Official Account Rich Menu on iOS and Android. Confirm:
+- It opens in LINE's LIFF browser.
+- It does not show the separate LINE email/password OAuth page.
+- Customer identity is verified and the customer row is created/updated.
+- Menu, checkout, order tracking, and optional location sharing continue to work.
+
+If a customer opens the GitHub Pages URL directly in Safari/Chrome, behavior may differ from opening the LIFF URL inside LINE.
