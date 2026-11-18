@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
     return reply(origin, 200, { success: true, orders: Array.isArray(data) ? data : [] });
   } catch (error) {
     console.error("my-orders failed:", error instanceof Error ? error.message : error);
-    if (error instanceof Error && error.message.includes("LINE_ID_TOKEN")) return reply(origin, 401, { error: "LINE login หมดอายุ กรุณาเปิดหน้า LIFF ใหม่" });
+    if (error instanceof Error && error.message.includes("LINE_ID_TOKEN")) return reply(origin, 401, { error: "LINE login หมดอายุ กรุณาเปิดหน้าเว็บสั่งซื้อใหม่" });
     return reply(origin, 500, { error: "order_tracking_service_error" });
   }
 });
