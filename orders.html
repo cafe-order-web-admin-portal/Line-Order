@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#176b45">
+<title>Café Amazon | Order Management</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--green:#176b45;--green-light:#e9f4ed;--ink:#252820;--muted:#788078;--bg:#f4f6f3;--line:#e3e9e3;--red:#a33d32;--orange:#9a5a14;--white:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans Thai',sans-serif}
+.bar{background:#fff;border-bottom:1px solid var(--line);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:5}
+.brand{font:600 18px Prompt;color:var(--green)}.sub{color:var(--muted);font-size:12px}
+.wrap{max-width:1120px;margin:auto;padding:20px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}
+.login{max-width:430px;margin:7vh auto}
+.field{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font:inherit;margin:7px 0 14px}
+.btn{border:0;border-radius:10px;background:var(--green);color:#fff;padding:11px 16px;font:600 13px 'IBM Plex Sans Thai';cursor:pointer}
+.btn:disabled{opacity:.5;cursor:wait}.btn.gray{background:#eef2ee;color:#394239}.btn.red{background:#fff0ee;color:var(--red)}
+.error{color:var(--red);font-size:13px;margin-top:10px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.toolbar select,.toolbar input{padding:10px;border:1px solid var(--line);border-radius:9px;font:inherit;background:white}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
+.stat b{font:600 24px Prompt;color:var(--green)}.stat small{display:block;color:var(--muted)}
+.order{background:#fff;border:1px solid var(--line);border-radius:15px;padding:16px;margin:12px 0}
+.orderhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.orderid{font:600 16px Prompt}.pill{border-radius:20px;background:var(--green-light);color:var(--green);padding:5px 11px;font-size:11px}
+.pill.pending{background:#fff4df;color:#975b11}.pill.cancelled{background:#fff0ee;color:var(--red)}.pill.completed{background:#e8f2ff;color:#245b9b}
+.meta{font-size:12px;color:var(--muted);margin-top:5px}
+.items{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0;margin:12px 0;font-size:13px}
+.items small{color:var(--muted);display:block}
+.total{font-weight:700;text-align:right;margin:10px 0}
+.quick-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.quick-actions .btn{min-width:190px}
+.cancel-btn{border:1px solid #f0d2cd;background:#fff8f7;color:var(--red);border-radius:10px;padding:10px 13px;font:600 12px 'IBM Plex Sans Thai';cursor:pointer}
+.timeline{display:flex;gap:0;margin:14px 0 8px;align-items:flex-start}
+.t-step{flex:1;position:relative;text-align:center;font-size:10px;color:#9aa19a;padding:0 3px}
+.t-step:not(:last-child):after{content:"";position:absolute;top:8px;left:58%;width:84%;height:2px;background:#e3e9e3;z-index:0}
+.t-dot{width:18px;height:18px;border-radius:50%;border:2px solid #d6ddd6;background:#fff;margin:0 auto 5px;position:relative;z-index:1}
+.t-step.done{color:var(--green)}.t-step.done .t-dot{background:var(--green);border-color:var(--green)}
+.t-step.done:not(:last-child):after{background:#7ab695}
+.history{border-left:2px solid #e3e9e3;margin:12px 0 12px 7px;padding-left:13px;display:grid;gap:9px}
+.history-row{position:relative;font-size:11px;color:var(--muted)}
+.history-row:before{content:"";position:absolute;left:-19px;top:4px;width:8px;height:8px;border-radius:50%;background:#78aa88}
+.history-row b{font-size:12px;color:var(--ink);font-weight:600}
+.empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:35px;text-align:center;color:var(--muted);margin-top:14px}
+.muted{color:var(--muted)}.hidden{display:none!important}
+.foot{font-size:11px;color:var(--muted);text-align:center;padding:20px}
+@media(max-width:760px){.grid{grid-template-columns:1fr 1fr}.wrap{padding:12px}.bar{padding:12px;align-items:flex-start;flex-direction:column}.quick-actions .btn{min-width:100%}}
+@media(max-width:440px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div><div class="brand">Café Amazon · Order Management</div><div class="sub">ตลาดทวีสมาน · หน้าจัดการคำสั่งซื้อ</div></div>
+  <div class="toolbar">
+    <a href="./index.html" class="btn gray" style="text-decoration:none">กลับ Web Admin</a>
+    <button id="refresh" class="btn gray hidden">รีเฟรช</button>
+    <button id="logout" class="btn red hidden">ออกจากระบบ</button>
+  </div>
+</header>
+
+<main class="wrap">
+<section id="login-panel" class="panel login">
+  <h2 style="font:600 20px Prompt;margin-top:0">เข้าสู่ระบบพนักงาน</h2>
+  <div class="muted">ใช้บัญชี Supabase Auth เดียวกับ Web Admin Portal</div>
+  <label>อีเมล</label><input class="field" id="email" type="email" autocomplete="username">
+  <label>รหัสผ่าน</label><input class="field" id="password" type="password" autocomplete="current-password">
+  <button class="btn" id="login" style="width:100%">เข้าสู่ระบบ</button>
+  <div class="error" id="login-error"></div>
+</section>
+
+<section id="app" class="hidden">
+  <div class="panel">
+    <div class="toolbar" style="justify-content:space-between">
+      <div><h2 style="font:600 20px Prompt;margin:0">รายการคำสั่งซื้อ</h2><div class="sub" id="signed-in"></div></div>
+      <div class="toolbar">
+        <select id="status-filter">
+          <option value="active">ออเดอร์ที่ต้องดำเนินการ</option><option value="all">ทุกสถานะ</option>
+          <option value="pending">รอร้านรับ</option><option value="preparing">กำลังเตรียม</option>
+          <option value="ready">พร้อมรับ</option><option value="completed">สำเร็จ</option><option value="cancelled">ยกเลิก</option>
+        </select>
+        <input id="search" placeholder="ค้นหาเลขออเดอร์ / ลูกค้า">
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="stat"><b id="count-today">0</b><small>ออเดอร์วันนี้</small></div>
+    <div class="stat"><b id="count-pending">0</b><small>กำลังดำเนินการ</small></div>
+    <div class="stat"><b id="count-ready">0</b><small>รอลูกค้ารับสินค้า</small></div>
+  </div>
+  <div class="sub" style="margin:12px 2px">ระบบรีเฟรชอัตโนมัติทุก 10 วินาที · เมื่อต้องการอัปเดตทันที กดรีเฟรช</div>
+  <div id="orders-list"></div>
+</section>
+</main>
+<div class="foot">พนักงานดำเนินการผ่านปุ่มเดียวต่อขั้นตอน · ลูกค้าจะได้รับการแจ้งเตือน LINE เมื่อสถานะเปลี่ยน (ต้องตั้งค่า LINE_CHANNEL_ACCESS_TOKEN)</div>
+
+<script>
+'use strict';
+const SUPABASE_URL='https://ytxbnqosenolojiifeikf.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_etVnNCvAjs9Q-F5k_E7UIw_NwULqK2x';
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const $=id=>document.getElementById(id);
+const labels={pending:'รอร้านรับออเดอร์',confirmed:'ร้านยืนยันแล้ว',preparing:'กำลังเตรียมสินค้า',ready:'พร้อมรับสินค้า',on_the_way:'กำลังจัดส่ง',arrived:'ถึงจุดหมายแล้ว',completed:'รับสินค้าแล้ว',cancelled:'ยกเลิก'};
+let orderCache=[],loading=false;
+const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function todayLocal(d){return new Date(d).toLocaleDateString('en-CA');}
+function nextAction(status){
+  if(status==='pending'||status==='confirmed')return {status:'preparing',label:'รับออเดอร์ / เริ่มเตรียม',hint:'รับออเดอร์และเริ่มทำในครั้งเดียว'};
+  if(status==='preparing')return {status:'ready',label:'พร้อมรับสินค้า',hint:'แจ้งลูกค้าว่าทำเสร็จแล้ว'};
+  if(status==='ready')return {status:'completed',label:'ส่งมอบสินค้าแล้ว',hint:'ปิดออเดอร์เมื่อส่งสินค้าให้ลูกค้า'};
+  if(status==='on_the_way')return {status:'arrived',label:'จัดส่งถึงลูกค้าแล้ว'};
+  if(status==='arrived')return {status:'completed',label:'ปิดออเดอร์'};
+  return null;
+}
+function statusPill(status){return '<span class="pill '+(status==='pending'?'pending':status==='cancelled'?'cancelled':status==='completed'?'completed':'')+'">'+esc(labels[status]||status)+'</span>';}
+function staffTimeline(status){
+  if(status==='cancelled')return '<div class="meta" style="color:#a33d32">ออเดอร์นี้ถูกยกเลิก</div>';
+  const steps=[['pending','รับออเดอร์'],['preparing','กำลังเตรียม'],['ready','พร้อมรับ'],['completed','ส่งมอบแล้ว']];
+  const pos={pending:0,confirmed:0,preparing:1,ready:2,on_the_way:2,arrived:2,completed:3}[status]??0;
+  return '<div class="timeline">'+steps.map((s,i)=>'<div class="t-step '+(i<=pos?'done':'')+'"><div class="t-dot"></div>'+s[1]+'</div>').join('')+'</div>';
+}
+function historyHtml(history){
+  if(!history?.length)return '';
+  return '<div class="history">'+history.map(h=>'<div class="history-row"><b>'+esc(labels[h.new_status]||h.new_status)+'</b><br>'+new Date(h.created_at).toLocaleString('th-TH')+(h.actor_type==='staff'?' · พนักงาน':'')+'</div>').join('')+'</div>';
+}
+function actionHtml(o){
+  const action=nextAction(o.order_status);
+  if(!action)return '<span class="muted">ไม่มีขั้นตอนถัดไป</span>';
+  return '<div class="quick-actions"><button class="btn" data-advance="'+esc(o.id)+'" data-next="'+action.status+'">'+action.label+'</button>'+
+    ((['pending','confirmed','preparing'].includes(o.order_status))?'<button class="cancel-btn" data-cancel="'+esc(o.id)+'">ยกเลิกออเดอร์</button>':'')+
+    '</div>';
+}
+async function showSession(session){
+  $('login-panel').classList.toggle('hidden',!!session);$('app').classList.toggle('hidden',!session);
+  $('logout').classList.toggle('hidden',!session);$('refresh').classList.toggle('hidden',!session);
+  if(session){$('signed-in').textContent=session.user.email||'Staff account';await loadOrders();}
+}
+async function loadOrders(){
+  if(loading)return;loading=true;
+  try{
+    const {data:orders,error}=await db.from('orders').select('id,order_number,branch_id,customer_id,order_status,payment_status,total_amount,customer_note,created_at,updated_at').order('created_at',{ascending:false}).limit(100);
+    if(error){$('orders-list').innerHTML='<div class="panel error">โหลดรายการไม่สำเร็จ: '+esc(error.message)+'</div>';return;}
+    const ids=(orders||[]).map(o=>o.id),customerIds=[...new Set((orders||[]).map(o=>o.customer_id))];
+    let customers=[],items=[],history=[];
+    if(customerIds.length){const r=await db.from('customers').select('id,customer_name,phone').in('id',customerIds);if(r.error)throw r.error;customers=r.data||[];}
+    if(ids.length){
+      const [i,h]=await Promise.all([
+        db.from('order_items').select('order_id,product_name,quantity,unit_price,subtotal,selected_options').in('order_id',ids),
+        db.from('order_status_history').select('order_id,previous_status,new_status,actor_type,note,created_at').in('order_id',ids).order('created_at',{ascending:true})
+      ]);
+      if(i.error)throw i.error;if(h.error)throw h.error;items=i.data||[];history=h.data||[];
+    }
+    const cm=new Map(customers.map(c=>[c.id,c]));
+    orderCache=(orders||[]).map(o=>({...o,customer:cm.get(o.customer_id)||{},items:items.filter(i=>i.order_id===o.id),history:history.filter(h=>h.order_id===o.id)}));
+    const today=todayLocal(new Date());
+    $('count-today').textContent=orderCache.filter(o=>todayLocal(o.created_at)===today).length;
+    $('count-pending').textContent=orderCache.filter(o=>['pending','confirmed','preparing','on_the_way','arrived'].includes(o.order_status)).length;
+    $('count-ready').textContent=orderCache.filter(o=>o.order_status==='ready').length;
+    renderOrders();
+  }catch(error){$('orders-list').innerHTML='<div class="panel error">ไม่สามารถโหลดข้อมูลออเดอร์/ประวัติสถานะ: '+esc(error.message||error)+'</div>';}
+  finally{loading=false;}
+}
+function renderOrders(){
+  const filter=$('status-filter').value,search=$('search').value.trim().toLowerCase();
+  const list=orderCache.filter(o=>{
+    const statusOK=filter==='all'||(filter==='active'? !['completed','cancelled'].includes(o.order_status):o.order_status===filter);
+    const searchOK=!search||[o.order_number,o.customer.customer_name,o.customer.phone].some(v=>String(v||'').toLowerCase().includes(search));
+    return statusOK&&searchOK;
+  });
+  if(!list.length){$('orders-list').innerHTML='<div class="empty">ไม่พบคำสั่งซื้อในเงื่อนไขนี้</div>';return;}
+  $('orders-list').innerHTML=list.map(o=>{
+    const lines=o.items.map(i=>{
+      let opts=[];try{opts=Array.isArray(i.selected_options)?i.selected_options.map(x=>x.option_name):[];}catch{}
+      return '<div><b>'+esc(i.product_name)+'</b> × '+i.quantity+' <span class="muted">'+money(i.subtotal)+'</span><small>'+esc(opts.join(', '))+'</small></div>';
+    }).join('');
+    return '<article class="order">'+
+      '<div class="orderhead"><div><div class="orderid">'+esc(o.order_number)+'</div><div class="meta">'+new Date(o.created_at).toLocaleString('th-TH')+' · '+esc(o.customer.customer_name||'ลูกค้า LINE')+(o.customer.phone?' · '+esc(o.customer.phone):'')+'</div></div>'+statusPill(o.order_status)+'</div>'+
+      staffTimeline(o.order_status)+
+      '<div class="items">'+(lines||'<span class="muted">ไม่มีรายการสินค้า</span>')+'</div>'+
+      (o.customer_note?'<div class="meta">หมายเหตุ: '+esc(o.customer_note)+'</div>':'')+
+      '<div class="total">ยอดรวม '+money(o.total_amount)+' · ชำระเงิน: '+esc(o.payment_status||'-')+'</div>'+
+      historyHtml(o.history)+
+      '<div class="actions">'+actionHtml(o)+'</div></article>';
+  }).join('');
+}
+async function login(){
+  $('login-error').textContent='';
+  const {data,error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+  if(error){$('login-error').textContent=error.message;return;}await showSession(data.session);
+}
+async function updateStatus(orderId,newStatus,button){
+  if(!newStatus)return;
+  button.disabled=true;const oldText=button.textContent;button.textContent='กำลังบันทึก…';
+  try{
+    const {data,error}=await db.functions.invoke('update-order-status',{body:{order_id:orderId,new_status:newStatus}});
+    if(error||!data?.success)throw new Error(data?.error||error?.message||'ไม่สามารถเปลี่ยนสถานะได้');
+    await loadOrders();
+    if(data.customer_notified)console.info('LINE status notification sent');
+  }catch(error){alert('อัปเดตสถานะไม่สำเร็จ: '+(error.message||error));button.disabled=false;button.textContent=oldText;}
+}
+$('login').onclick=login;$('password').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+$('refresh').onclick=loadOrders;$('logout').onclick=async()=>{await db.auth.signOut();await showSession(null);};
+$('status-filter').onchange=renderOrders;$('search').oninput=renderOrders;
+$('orders-list').addEventListener('click',e=>{
+  const advance=e.target.closest('[data-advance]');
+  if(advance){updateStatus(advance.dataset.advance,advance.dataset.next,advance);return;}
+  const cancel=e.target.closest('[data-cancel]');
+  if(cancel&&confirm('ยืนยันยกเลิกออเดอร์นี้หรือไม่?'))updateStatus(cancel.dataset.cancel,'cancelled',cancel);
+});
+db.auth.onAuthStateChange((_event,session)=>{showSession(session);});
+db.auth.getSession().then(({data})=>showSession(data.session));
+setInterval(()=>{if(!$('app').classList.contains('hidden')&&!document.hidden)loadOrders();},10000);
+</script>
+</body>
+</html>
