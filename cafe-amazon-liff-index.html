@@ -133,7 +133,18 @@ const LOCATION_ONBOARDING_KEY='ca_location_onboarding_v1';
 function locationConsentKey(){return LOCATION_ONBOARDING_KEY+':'+(profile?.userId||'anonymous');}
 function closeLocationOnboarding(){$('location-onboarding').classList.remove('show');}
 async function requestLocationOnFirstLogin(){
- const key=locationConsentKey();if(localStorage.getItem(key))return;
+ const key=locationConsentKey();
+ const saved=localStorage.getItem(key);
+ if(saved==='granted'||saved==='denied'||saved==='skipped')return;
+ // If the operating system/browser already granted or denied location access,
+ // do not show our in-page onboarding dialog again.
+ try{
+  if(navigator.permissions?.query){
+   const permission=await navigator.permissions.query({name:'geolocation'});
+   if(permission.state==='granted'){localStorage.setItem(key,'granted');return;}
+   if(permission.state==='denied'){localStorage.setItem(key,'denied');return;}
+  }
+ }catch(error){console.info('Geolocation permission state is not queryable in this webview.');}
  $('location-onboarding').classList.add('show');
  $('location-allow').onclick=async()=>{
   const allow=$('location-allow'),later=$('location-later');allow.disabled=true;later.disabled=true;allow.textContent='กำลังตรวจสอบตำแหน่ง…';
