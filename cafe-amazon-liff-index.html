@@ -78,7 +78,7 @@ function locationConsentKey(){
 function getLocationConsent(){try{return localStorage.getItem(locationConsentKey())||'';}catch(e){return '';}}
 function setLocationConsent(value){try{localStorage.setItem(locationConsentKey(),value);}catch(e){console.warn('Cannot save location consent:',e);}}
 
-function base64Url(bytes){let binary='';bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');}
+function base64Url(bytes){let binary='';bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 function randomToken(size=32){const bytes=new Uint8Array(size);crypto.getRandomValues(bytes);return base64Url(bytes);}
 async function sha256Base64Url(value){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return base64Url(new Uint8Array(digest));}
 function getLineSession(){try{const s=JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null');if(!s?.idToken||Number(s.expiresAt)<=Date.now()+60000)return null;profile=s.profile||null;return s;}catch(_){return null;}}
