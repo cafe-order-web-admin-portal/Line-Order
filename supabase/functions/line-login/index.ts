@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
     const verifyResponse = await fetch(VERIFY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ id_token: tokenData.id_token, client_id: CHANNEL_ID }),
+      body: new URLSearchParams({ id_token: tokenData.id_token, client_id: CHANNEL_ID, nonce }),
     });
     const claims = await verifyResponse.json().catch(() => ({}));
     const now = Math.floor(Date.now() / 1000);
@@ -141,6 +141,7 @@ Deno.serve(async (req: Request) => {
       success: true,
       id_token: tokenData.id_token,
       expires_in: Number(tokenData.expires_in) || 3600,
+      id_token_expires_at: Number(claims.exp) * 1000,
       profile: {
         userId: lineUserId,
         displayName: customerName,
