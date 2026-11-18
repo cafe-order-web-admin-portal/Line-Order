@@ -51,6 +51,19 @@
 .live-order-card .live-order-actions{gap:5px;margin-top:5px}
 .live-order-card .live-order-actions button{padding:6px 9px;font-size:10px;min-height:30px}
 
+/* Fixed-height order cards: same top and bottom baseline, action buttons never jump */
+@media(min-width:801px){
+ .queue-list{grid-auto-rows:440px;align-items:stretch}
+ .queue-list>.live-order-card{height:440px;min-height:440px;max-height:440px;box-sizing:border-box}
+ .queue-list>.featured-order{grid-column:1/-1}
+ .live-order-card .order-products-list{min-height:0;overflow-y:auto;scrollbar-width:thin}
+ .live-order-card .live-order-actions{margin-top:auto!important;padding-top:6px;flex-shrink:0}
+}
+@media(max-width:800px){
+ .queue-list{grid-auto-rows:auto}
+ .queue-list>.live-order-card{height:auto;min-height:0;max-height:none}
+ .live-order-card .live-order-actions{margin-top:6px!important}
+}
 /* Final LIVE ORDERS card refinement: one prominent total and aligned action buttons */
 .queue-list{align-items:stretch}
 .live-order-card{display:flex;flex-direction:column;min-width:0;height:100%;padding:6px 7px;gap:0}
