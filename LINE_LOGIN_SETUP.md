@@ -7,7 +7,7 @@ This project uses the existing LINE Login channel **2012679988**. Do not create 
 In Supabase Dashboard → Project Settings → Edge Functions → Secrets, add:
 
 - `LINE_LOGIN_CHANNEL_SECRET`: the Channel secret from LINE Developers Console for channel 2012679988.
-- `LINE_LOGIN_REDIRECT_URI`: the exact callback URL used by the customer storefront. The frontend derives this from `window.location.origin + window.location.pathname`; copy the full URL from the deployed storefront address bar, including the HTML filename/path and trailing slash rules.
+- `LINE_LOGIN_REDIRECT_URI`: the exact callback URL used by the customer storefront. With standard GitHub Pages project hosting for the current repository, the expected URL is `https://cafe-order-web-admin-portal.github.io/Line-Order/cafe-amazon-liff-index.html`. Confirm the actual deployed page URL first; if Pages uses a custom domain or another path, use that exact full URL instead. The frontend derives the callback from `window.location.origin + window.location.pathname`.
 
 The existing `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` must remain configured server-side. Never place these secrets in `assets/config.js` or browser code.
 
