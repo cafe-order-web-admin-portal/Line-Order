@@ -137,7 +137,7 @@ function orderCardHtml(order){
    const group=x.group_name||x.option_group_name||x.category_name||'',value=x.option_value||x.option_name||x.value||x.name||'';
    if(!value)return '';return group&&group.toLowerCase()!==String(value).toLowerCase()?group+': '+value:value;
   }).filter(Boolean):[];
-  const image=item.image_url?'<img src="'+esc(item.image_url)+'" alt="" loading="lazy" onerror="this.style.display=\\'none\\'">':'<span>☕</span>';
+  const image=item.image_url?'<img src="'+esc(item.image_url)+'" alt="" loading="lazy">':'<span>☕</span>';
   return '<div class="order-product-row"><div class="order-product-thumb">'+image+'</div><div class="order-product-copy"><div class="order-product-name">'+esc(item.product_name||'สินค้า')+'</div>'+(opts.length?'<div class="order-product-options"><b>ปรับแต่ง:</b>'+opts.map(x=>'<span>'+esc(x)+'</span>').join('')+'</div>':'<div class="order-product-options order-options-none">ไม่ปรับแต่งเพิ่มเติม</div>')+'<div class="order-product-unit">'+money(item.unit_price)+' / แก้ว</div></div><div class="order-product-qty">× '+(Number(item.quantity)||0)+'</div><div class="order-product-subtotal">'+money(item.subtotal)+'</div></div>';
  }).join('');
  const customerName=order.customer?.customer_name||'ลูกค้า LINE',phone=order.customer?.phone||'ไม่ระบุเบอร์โทร';
