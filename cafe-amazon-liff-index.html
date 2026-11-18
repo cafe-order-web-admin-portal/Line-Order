@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#5b3a27"><title>Café Amazon | สั่งเครื่องดื่ม</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
+<script src="./assets/config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--coffee:#593b2b;--green:#176b45;--cream:#f7f4ed;--ink:#29251f;--muted:#827b70;--line:#e9e3d9;--warning:#a85b16;--danger:#a3342b;--success:#176b45}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:'IBM Plex Sans Thai',sans-serif;padding-bottom:96px}
+header{background:linear-gradient(120deg,#4b3024,#75513a);color:white;padding:22px 18px 24px;border-radius:0 0 22px 22px}
+.top{display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;border-radius:50%;background:#fff;color:var(--green);display:grid;place-items:center;font:700 24px Prompt}.brand{font:600 18px Prompt}.sub{font-size:12px;opacity:.82}.branch{margin-top:18px;font-size:13px;opacity:.95}.hero{font:600 22px Prompt;margin:8px 0 0}
+.header-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}.header-actions button{background:#ffffff20;color:white;border:1px solid #ffffff55;border-radius:20px;padding:7px 13px;font:500 12px 'IBM Plex Sans Thai',sans-serif}
+main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(--muted);margin:0 0 14px;line-height:1.5}.section-title{font:600 17px Prompt;margin:16px 0 10px}
+.chips{display:flex;gap:8px;overflow:auto;padding:2px 0 8px}.chip{white-space:nowrap;border:1px solid var(--line);border-radius:22px;background:white;padding:8px 14px;font:500 13px 'IBM Plex Sans Thai',sans-serif;color:var(--ink)}.chip.active{background:var(--green);color:#fff;border-color:var(--green)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{background:white;border:1px solid var(--line);border-radius:15px;overflow:hidden}.photo{height:118px;background:#eee8dd;display:grid;place-items:center;color:#9b8e7d;font-size:34px}.photo img{width:100%;height:100%;object-fit:cover}.info{padding:11px}.name{font-weight:600;font-size:14px;min-height:42px}.desc{font-size:11px;color:var(--muted);min-height:18px}.row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px}.price{font-weight:700;color:var(--green)}button{font-family:inherit;cursor:pointer}.add{border:0;background:var(--green);color:white;border-radius:20px;padding:7px 13px;font-weight:600}.add:disabled{background:#c8c2b9;cursor:not-allowed}.badge{font-size:10px;color:var(--warning);background:#fff2df;padding:4px 7px;border-radius:12px;display:inline-block;margin-top:6px}.empty{grid-column:1/-1;text-align:center;padding:30px 12px;color:var(--muted);background:white;border-radius:14px;line-height:1.6}
+.cartbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom));display:flex;gap:12px;align-items:center;justify-content:space-between;box-shadow:0 -4px 20px #0000000b;z-index:3}.cartmeta{font-size:12px;color:var(--muted)}.carttotal{font-weight:700;font-size:17px}.checkout{background:var(--green);color:white;border:0;border-radius:12px;padding:12px 22px;font-weight:600}.checkout:disabled{opacity:.45;cursor:not-allowed}
+.modal{display:none;position:fixed;inset:0;background:#0008;z-index:5;align-items:flex-end}.modal.show{display:flex}.sheet{background:white;border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:88vh;overflow:auto}.sheet h2{font:600 18px Prompt;margin:0 0 14px}.close{float:right;border:0;background:#f2eee8;border-radius:50%;width:32px;height:32px;font-size:20px}.cartline{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:10px 0;font-size:13px}.cartline small{display:block;color:var(--muted)}.cart-actions{display:flex;gap:6px;align-items:center}.qtybtn{border:1px solid var(--line);background:#fff;border-radius:8px;width:28px;height:28px}.field{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font:inherit;margin:6px 0 12px}.hint{font-size:12px;color:var(--muted);line-height:1.5}.option-group{border-top:1px solid var(--line);padding:12px 0}.option-group h3{font-size:14px;margin:0 0 8px}.option-choice{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;font-size:13px}.option-choice label{display:flex;align-items:center;gap:9px;flex:1}.action-row{display:flex;gap:10px;margin-top:14px}.action-row button{flex:1}.primary{background:var(--green);color:#fff;border:0;border-radius:11px;padding:12px;font-weight:600}.secondary{background:white;color:var(--ink);border:1px solid var(--line);border-radius:11px;padding:12px}.error{color:var(--danger);font-size:12px;margin-top:8px}.total-row{display:flex;justify-content:space-between;margin:14px 0;font-weight:700}
+.receipt{display:none;background:#eaf4ed;border:1px solid #c9e2d0;border-radius:14px;padding:14px;margin:14px 0}.receipt.show{display:block}.receipt b{color:var(--green)}.tracking-list{display:grid;gap:10px}.tracking-card{background:white;border:1px solid var(--line);border-radius:13px;padding:13px}.tracking-head{display:flex;justify-content:space-between;gap:10px;font-weight:600}.status-pill{font-size:11px;background:#eaf4ed;color:var(--green);border-radius:14px;padding:3px 9px;white-space:nowrap}.tracking-card small{color:var(--muted)}
+@media(min-width:600px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.photo{height:145px}.modal{align-items:center;justify-content:center}.sheet{max-width:520px;border-radius:20px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><div class="logo">A</div><div><div class="brand">Café Amazon</div><div class="sub">Order Online · สั่งง่าย รับสะดวก</div></div></div>
+  <div class="branch">สาขา ตลาดทวีสมาน · ภูเก็ต</div><div class="hero">เติมความสดชื่นในแบบคุณ ☕</div>
+  <div class="header-actions"><button id="track-button">ติดตามคำสั่งซื้อ</button><button id="refresh-button">รีเฟรชเมนู</button></div>
+</header>
+<main>
+  <p class="status" id="status">กำลังเชื่อมต่อระบบ…</p>
+  <div class="receipt" id="receipt"></div>
+  <div class="section-title">เลือกหมวดหมู่</div><div class="chips" id="categories"><button class="chip active" data-cat="all">ทั้งหมด</button></div>
+  <div class="section-title">เมนู Café Amazon</div><div class="grid" id="products"><div class="empty">กำลังโหลดเมนู…</div></div>
+  <section id="tracking-section" hidden><div class="section-title">คำสั่งซื้อของฉัน</div><div id="tracking-list" class="tracking-list"><div class="empty">กดติดตามคำสั่งซื้อเพื่อดูสถานะ</div></div></section>
+</main>
+<div class="cartbar"><div><div class="cartmeta" id="cart-count">0 รายการ</div><div class="carttotal" id="cart-total">฿0.00</div></div><button class="checkout" id="checkout" disabled>ดูตะกร้า</button></div>
+
+<div class="modal" id="options-modal"><div class="sheet"><button class="close" data-close="options-modal">×</button><h2 id="option-product-title">ปรับแต่งเครื่องดื่ม</h2><p class="hint" id="option-product-price"></p><div id="option-groups"></div><div class="error" id="option-error"></div><div class="action-row"><button class="secondary" data-close="options-modal">ยกเลิก</button><button class="primary" id="add-configured">เพิ่มลงตะกร้า</button></div></div></div>
+
+<div class="modal" id="cart-modal"><div class="sheet"><button class="close" data-close="cart-modal">×</button><h2>ตะกร้าของคุณ</h2><div id="cart-lines"></div><div class="total-row"><span>ยอดรวม</span><span id="modal-total">฿0.00</span></div><label class="hint" for="customer-name">ชื่อผู้สั่ง</label><input class="field" id="customer-name" maxlength="120" placeholder="ระบุชื่อสำหรับรับสินค้า"><label class="hint" for="customer-phone">เบอร์โทรศัพท์ (ไม่บังคับ)</label><input class="field" id="customer-phone" inputmode="tel" maxlength="30" placeholder="เบอร์โทรศัพท์"><label class="hint" for="customer-note">หมายเหตุถึงร้าน (ไม่บังคับ)</label><input class="field" id="customer-note" maxlength="500" placeholder="เช่น ไม่รับหลอด"><p class="hint">ระบบจะตรวจสอบราคาและสถานะสินค้าอีกครั้งก่อนบันทึกคำสั่งซื้อ</p><div class="error" id="order-error"></div><button class="primary" style="width:100%" id="confirm-order">ยืนยันคำสั่งซื้อ</button></div></div>
+
+<script>
+'use strict';
+const LIFF_ID='2012679988-ORHhLD7I';
+const BRANCH_CODE='PKT001';
+const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
+const TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders';
+const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{};
+const db=(cfg.url&&cfg.publishableKey&&window.supabase)?window.supabase.createClient(cfg.url,cfg.publishableKey):null;
+let profile=null,allProducts=[],activeCategory='all',cart=new Map();
+let optionGroups=[],optionChoices=[],productGroupLinks=[],productOptionLinks=[],currentProduct=null;
+let activeRequestId=null;
+const $=id=>document.getElementById(id);
+const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const statusLabel={pending:'รอยืนยัน',confirmed:'ร้านยืนยันแล้ว',preparing:'กำลังเตรียม',ready:'พร้อมรับสินค้า',on_the_way:'กำลังจัดส่ง',arrived:'ถึงจุดหมายแล้ว',completed:'สำเร็จ',cancelled:'ยกเลิก'};
+function setStatus(s){$('status').textContent=s}
+function showModal(id){$(id).classList.add('show')}
+function hideModal(id){$(id).classList.remove('show')}
+function selectedOptions(ids){return ids.map(id=>optionChoices.find(o=>String(o.id)===String(id))).filter(Boolean)}
+function getProductGroups(productId){
+  return productGroupLinks.filter(x=>String(x.product_id)===String(productId)).map(link=>{
+    const group=optionGroups.find(g=>String(g.id)===String(link.group_id));
+    if(!group||!group.is_active)return null;
+    const choices=productOptionLinks.filter(m=>String(m.product_id)===String(productId)).map(m=>optionChoices.find(o=>String(o.id)===String(m.option_id))).filter(o=>o&&o.is_active&&String(o.group_id)===String(group.id)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+    return {...link,group,choices};
+  }).filter(x=>x&&x.choices.length).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+}
+function optionDelta(ids){return selectedOptions(ids).reduce((sum,o)=>sum+Number(o.price_delta||0),0)}
+function cartLineUnitPrice(line){return Number(line.product.price)+optionDelta(line.optionIds)}
+async function start(){
+  if(!db){setStatus('ไม่พบการตั้งค่า Supabase — ตรวจสอบ assets/config.js');$('products').innerHTML='<div class="empty">ยังเชื่อมต่อฐานข้อมูลไม่ได้</div>';return;}
+  try{
+    await liff.init({liffId:LIFF_ID});
+    if(!liff.isLoggedIn()){
+      setStatus('กำลังเข้าสู่ระบบ LINE…');
+      liff.login({redirectUri:window.location.href});
+      return;
+    }
+    profile=await liff.getProfile().catch(()=>null);
+    if(profile?.displayName)$('customer-name').value=profile.displayName;
+  }catch(e){console.error('LIFF init:',e);setStatus('เริ่มต้น LINE LIFF ไม่สำเร็จ: '+(e.message||e));}
+  await loadMenu();
+}
+async function loadMenu(){
+  setStatus('กำลังค้นหาสาขา '+BRANCH_CODE+'…');
+  const branchRes=await db.from('branches').select('id,branch_code,branch_name').eq('branch_code',BRANCH_CODE).single();
+  if(branchRes.error||!branchRes.data){setStatus('ค้นหาสาขาไม่สำเร็จ: '+(branchRes.error?.message||'ไม่พบสาขา'));$('products').innerHTML='<div class="empty">ไม่พบข้อมูลสาขา กรุณาตรวจสอบรหัสสาขา</div>';return;}
+  const branch=branchRes.data;
+  const [catRes,linkRes]=await Promise.all([
+    db.from('categories').select('id,category_name,sort_order,is_active').eq('is_active',true).order('sort_order',{ascending:true}),
+    db.from('branch_products').select('product_id,price,is_available').eq('branch_id',branch.id)
+  ]);
+  if(catRes.error){setStatus('อ่านหมวดหมู่ไม่สำเร็จ: '+catRes.error.message);$('products').innerHTML='<div class="empty">โหลดหมวดหมู่ไม่สำเร็จ</div>';return;}
+  if(linkRes.error){setStatus('อ่านรายการสินค้าสาขาไม่สำเร็จ: '+linkRes.error.message);$('products').innerHTML='<div class="empty">โหลดรายการสินค้าสาขาไม่สำเร็จ</div>';return;}
+  const links=linkRes.data||[],ids=[...new Set(links.map(x=>x.product_id).filter(Boolean))];
+  renderCategories(catRes.data||[]);
+  if(!ids.length){allProducts=[];renderProducts();setStatus('พบสาขา '+branch.branch_name+' แต่ยังไม่มีสินค้าใน branch_products');return;}
+  const productRes=await db.from('products').select('id,category_id,product_code,product_name,description,image_url,is_active,is_featured,display_order').in('id',ids).order('display_order',{ascending:true});
+  if(productRes.error){setStatus('อ่านสินค้าไม่สำเร็จ: '+productRes.error.message);$('products').innerHTML='<div class="empty">โหลดสินค้าไม่สำเร็จ</div>';return;}
+  const priceMap=new Map(links.map(x=>[String(x.product_id),x]));
+  allProducts=(productRes.data||[]).map(p=>{const bp=priceMap.get(String(p.id))||{};const price=Number(bp.price??0);return {...p,price,is_available:bp.is_available===true,can_order:p.is_active===true&&bp.is_available===true&&price>0};});
+  await loadOptions(ids);
+  renderProducts();
+  const orderable=allProducts.filter(p=>p.can_order).length;
+  setStatus('สาขา '+branch.branch_name+' · พบสินค้า '+allProducts.length+' รายการ · พร้อมสั่ง '+orderable+' รายการ');
+}
+async function loadOptions(productIds){
+  const [gr,pg,op,po]=await Promise.all([
+    db.from('product_option_groups').select('id,group_code,group_name,selection_type,is_active,sort_order').eq('is_active',true).order('sort_order'),
+    db.from('product_option_group_products').select('product_id,group_id,is_required,min_select,max_select,sort_order').in('product_id',productIds),
+    db.from('product_options').select('id,group_id,option_code,option_name,price_delta,is_active,sort_order').eq('is_active',true).order('sort_order'),
+    db.from('product_option_product_options').select('product_id,option_id,sort_order').in('product_id',productIds)
+  ]);
+  const failed=[gr,pg,op,po].find(r=>r.error);
+  if(failed){console.error('Option data load failed:',failed.error);optionGroups=[];productGroupLinks=[];optionChoices=[];productOptionLinks=[];setStatus($('status').textContent+' · ยังอ่านตัวเลือกสินค้าไม่ได้');return;}
+  optionGroups=gr.data||[];productGroupLinks=pg.data||[];optionChoices=op.data||[];productOptionLinks=po.data||[];
+}
+function renderCategories(cats){$('categories').innerHTML='<button class="chip active" data-cat="all">ทั้งหมด</button>'+cats.map(c=>'<button class="chip" data-cat="'+esc(c.id)+'">'+esc(c.category_name)+'</button>').join('');}
+function renderProducts(){
+  const list=activeCategory==='all'?allProducts:allProducts.filter(p=>String(p.category_id)===String(activeCategory));
+  $('products').innerHTML=list.length?list.map(p=>'<article class="card"><div class="photo">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="'+esc(p.product_name)+'">':'☕')+'</div><div class="info"><div class="name">'+esc(p.product_name)+'</div><div class="desc">'+esc(p.description||p.product_code||'')+'</div><div class="row"><span class="price">'+(p.price>0?money(p.price):'รอระบุราคา')+'</span><button class="add" data-add="'+esc(p.id)+'" '+(p.can_order?'':'disabled')+'>'+(p.can_order?'+ เพิ่ม':'ยังไม่เปิดขาย')+'</button></div>'+(p.can_order?'':'<span class="badge">รอเปิดสถานะขายของสาขา</span>')+'</div></article>').join(''):'<div class="empty">ยังไม่มีสินค้าในหมวดนี้</div>';
+}
+function openProductOptions(product){
+  currentProduct=product;$('option-product-title').textContent=product.product_name;$('option-product-price').textContent='ราคาเริ่มต้น '+money(product.price);$('option-error').textContent='';
+  const groups=getProductGroups(product.id);
+  if(!groups.length){addConfiguredProduct([]);return;}
+  $('option-groups').innerHTML=groups.map(g=>{
+    const type=g.group.selection_type==='multiple'?'checkbox':'radio';
+    return '<section class="option-group" data-group="'+esc(g.group_id)+'" data-min="'+Number(g.min_select||0)+'" data-max="'+Number(g.max_select||1)+'"><h3>'+esc(g.group.group_name)+(g.is_required||g.min_select>0?' *':' (ไม่บังคับ)')+'</h3>'+g.choices.map(o=>'<div class="option-choice"><label><input type="'+type+'" name="option-'+esc(g.group_id)+'" value="'+esc(o.id)+'"> '+esc(o.option_name)+'</label><span>'+((Number(o.price_delta)||0)!==0?((o.price_delta>0?'+':'')+money(o.price_delta)):'')+'</span></div>').join('')+'</section>';
+  }).join('');
+  showModal('options-modal');
+}
+function collectOptions(){
+  const selected=[];
+  for(const section of $('option-groups').querySelectorAll('[data-group]')){
+    const min=Number(section.dataset.min||0),max=Number(section.dataset.max||1),count=section.querySelectorAll('input:checked').length;
+    if(count<min||count>max){$('option-error').textContent='กรุณาเลือกตัวเลือกในกลุ่ม '+section.querySelector('h3').textContent+' ให้ถูกต้อง';return null;}
+    section.querySelectorAll('input:checked').forEach(x=>selected.push(x.value));
+  }
+  return selected;
+}
+function addConfiguredProduct(optionIds){
+  if(!currentProduct)return;
+  const key=String(currentProduct.id)+'|'+[...optionIds].sort().join(',');
+  const prev=cart.get(key);cart.set(key,{key,product:currentProduct,qty:(prev?.qty||0)+1,optionIds:[...optionIds]});
+  hideModal('options-modal');currentProduct=null;activeRequestId=null;updateCart();
+}
+function updateCart(){
+  let quantity=0,total=0;cart.forEach(line=>{quantity+=line.qty;total+=cartLineUnitPrice(line)*line.qty;});
+  $('cart-count').textContent=quantity+' รายการ';$('cart-total').textContent=money(total);$('checkout').disabled=!quantity;
+}
+function renderCart(){
+  $('cart-lines').innerHTML=[...cart.values()].map(line=>{
+    const labels=selectedOptions(line.optionIds).map(x=>x.option_name).join(', ');
+    return '<div class="cartline"><div><b>'+esc(line.product.product_name)+'</b><small>'+esc(labels)+'</small><small>'+money(cartLineUnitPrice(line))+' / รายการ</small></div><div class="cart-actions"><button class="qtybtn" data-dec="'+esc(line.key)+'">−</button><b>'+line.qty+'</b><button class="qtybtn" data-inc="'+esc(line.key)+'">+</button></div></div>';
+  }).join('');
+  $('modal-total').textContent=$('cart-total').textContent;
+}
+async function submitOrder(){
+  $('order-error').textContent='';
+  if(!liff.isLoggedIn()){liff.login({redirectUri:window.location.href});return;}
+  const idToken=liff.getIDToken();
+  if(!idToken){$('order-error').textContent='ไม่พบ LINE ID Token กรุณาตรวจสอบ LIFF Scope ว่ามี openid';return;}
+  if(!cart.size){$('order-error').textContent='กรุณาเลือกสินค้าอย่างน้อย 1 รายการ';return;}
+  const items=[...cart.values()].map(x=>({product_id:x.product.id,quantity:x.qty,option_ids:x.optionIds}));
+  const button=$('confirm-order');button.disabled=true;button.textContent='กำลังส่งคำสั่งซื้อ…';
+  if(!activeRequestId)activeRequestId=crypto.randomUUID();
+  try{
+    const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),items})});
+    const result=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
+    if(!res.ok||result.success!==true)throw new Error(result.error||'ไม่สามารถสร้างคำสั่งซื้อได้');
+    cart.clear();activeRequestId=null;updateCart();hideModal('cart-modal');
+    $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: <b>'+money(result.total_amount)+'</b><br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน')+'<br><small>สามารถติดตามสถานะได้จากปุ่ม “ติดตามคำสั่งซื้อ” ด้านบน</small>';
+    $('receipt').classList.add('show');
+    await loadMyOrders(false);
+  }catch(e){console.error('Order submit:',e);$('order-error').textContent=e.message||'เกิดข้อผิดพลาด กรุณาลองอีกครั้ง';}
+  finally{button.disabled=false;button.textContent='ยืนยันคำสั่งซื้อ';}
+}
+async function loadMyOrders(scroll=true){
+  if(!liff.isLoggedIn()){liff.login({redirectUri:window.location.href});return;}
+  const token=liff.getIDToken();if(!token){setStatus('ไม่พบ LINE ID Token — ตรวจสอบ LIFF Scope openid');return;}
+  $('tracking-section').hidden=false;$('tracking-list').innerHTML='<div class="empty">กำลังโหลดประวัติคำสั่งซื้อ…</div>';
+  try{
+    const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:token,limit:10})});
+    const data=await res.json().catch(()=>({error:'invalid_response'}));
+    if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดประวัติได้');
+    const orders=data.orders||[];
+    $('tracking-list').innerHTML=orders.length?orders.map(o=>'<article class="tracking-card"><div class="tracking-head"><span>'+esc(o.order_number)+'</span><span class="status-pill">'+esc(statusLabel[o.order_status]||o.order_status)+'</span></div><small>'+new Date(o.created_at).toLocaleString('th-TH')+'</small><div style="margin-top:8px">'+(o.items||[]).map(i=>esc(i.product_name)+' × '+i.quantity).join('<br>')+'</div><div class="total-row"><span>ยอดรวม</span><span>'+money(o.total_amount)+'</span></div></article>').join(''):'<div class="empty">ยังไม่มีประวัติคำสั่งซื้อ</div>';
+    if(scroll)$('tracking-section').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){$('tracking-list').innerHTML='<div class="empty">'+esc(e.message)+'</div>';}
+}
+$('categories').addEventListener('click',e=>{const b=e.target.closest('[data-cat]');if(!b)return;activeCategory=b.dataset.cat;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderProducts();});
+$('products').addEventListener('click',e=>{const b=e.target.closest('[data-add]');if(!b||b.disabled)return;const p=allProducts.find(x=>String(x.id)===b.dataset.add);if(p?.can_order)openProductOptions(p);});
+$('add-configured').onclick=()=>{const ids=collectOptions();if(ids!==null)addConfiguredProduct(ids);};
+$('checkout').onclick=()=>{renderCart();showModal('cart-modal');};
+$('confirm-order').onclick=submitOrder;
+$('track-button').onclick=()=>loadMyOrders(true);
+$('refresh-button').onclick=loadMenu;
+document.addEventListener('click',e=>{
+  const close=e.target.closest('[data-close]');if(close){hideModal(close.dataset.close);return;}
+  const inc=e.target.closest('[data-inc]');if(inc){const item=cart.get(inc.dataset.inc);if(item){item.qty++;activeRequestId=null;updateCart();renderCart();}return;}
+  const dec=e.target.closest('[data-dec]');if(dec){const item=cart.get(dec.dataset.dec);if(item){if(item.qty<=1)cart.delete(dec.dataset.dec);else item.qty--;activeRequestId=null;updateCart();renderCart();}return;}
+});
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)hideModal(m.id);}));
+start();
+</script>
+</body>
+</html>
