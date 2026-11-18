@@ -117,7 +117,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("share-customer-location failed:", message);
-    if (message.includes("LINE_ID_TOKEN_INVALID")) return reply(origin, 401, { error: "LINE login หมดอายุ กรุณาเปิด LINE ใหม่" });
+    if (message.includes("LINE_ID_TOKEN_INVALID")) return reply(origin, 401, { error: "LINE login หมดอายุ กรุณาเข้าสู่ระบบ LINE ใหม่" });
     return reply(origin, 500, { error: "ไม่สามารถบันทึกตำแหน่งได้ในขณะนี้" });
   }
 });
