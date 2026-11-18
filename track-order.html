@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="th"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#075b39"><title>Café Amazon | ติดตามสถานะ Order</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script><script src="./assets/config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--green:#075b39;--green2:#0b7548;--ink:#233329;--muted:#7b887f;--line:#e5ece6;--bg:#f3f7f3}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans Thai',sans-serif}
+header{background:linear-gradient(120deg,#064b30,#087447);color:#fff;padding:19px 17px 21px;border-radius:0 0 20px 20px}
+.brand{font:700 18px Prompt}.sub{font-size:11px;opacity:.82}.hero{font:600 18px Prompt;margin-top:10px}
+main{max-width:560px;margin:auto;padding:14px 13px 30px}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 1px 12px}.hint{font-size:10px;color:var(--muted)}
+button{font:500 11px 'IBM Plex Sans Thai',sans-serif;border:1px solid #dce7de;background:#fff;color:var(--green);border-radius:18px;padding:7px 11px}
+#message{font-size:12px;color:var(--muted);text-align:center;padding:25px 12px}
+.order-list{display:grid;gap:9px}
+.order-card{background:#fff;border:1px solid var(--line);border-radius:13px;padding:11px 12px;box-shadow:0 2px 7px #173b2510}
+.card-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.order-no{font:700 12px Prompt;color:#43564a}.order-time{font-size:9px;color:var(--muted);margin-top:2px}
+.status{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--green);background:#edf7ef;padding:5px 8px;border-radius:20px;white-space:nowrap}
+.status-icon{font-size:20px;line-height:1}
+.status.pending{background:#fff4e5;color:#a45a0a}.status.confirmed{background:#edf4ff;color:#2864a2}.status.preparing{background:#f3edff;color:#7045a5}.status.ready{background:#e8f8ed;color:#087344}.status.on_the_way,.status.arrived{background:#e8f7f7;color:#087878}.status.completed{background:#edf3ee;color:#657269}.status.cancelled{background:#fff0ee;color:#a33d32}
+.products{font-size:11px;line-height:1.5;margin:8px 0 6px;color:#45564b}.products small{display:block;font-size:9px;color:#8a958d}
+.card-bottom{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #f0f3f0;padding-top:6px;font-size:10px;color:var(--muted)}
+.total{font:700 13px Prompt;color:var(--green)}
+.progress{display:flex;align-items:center;gap:4px;margin:8px 0 5px}.step{height:4px;flex:1;background:#e7ece8;border-radius:8px}.step.done{background:#1b9b60}
+.cancel-note{font-size:10px;color:#a33d32;margin-top:7px}.empty{background:#fff;border:1px dashed #d7e3d9;border-radius:12px;padding:24px 14px;text-align:center;color:var(--muted);font-size:12px}
+@media(min-width:520px){main{padding-top:18px}.order-card{padding:13px 14px}}
+</style></head><body>
+<header><div class="brand">Café Amazon</div><div class="sub">ตลาดทวีสมาน · ภูเก็ต</div><div class="hero">ติดตามสถานะคำสั่งซื้อ ☕</div></header>
+<main><div class="toolbar"><span class="hint">สถานะอัปเดตอัตโนมัติทุก 15 วินาที</span><button id="refresh">↻ รีเฟรช</button></div><div id="message">กำลังเชื่อมต่อ LINE…</div><div id="orders" class="order-list"></div></main>
+<script>
+'use strict';
+const LINE_LIFF_ID='2012679988-ORHhLD7I',LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login',TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders',LINE_SESSION_KEY='ca_line_liff_session_v1';
+const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{},$=id=>document.getElementById(id);
+const statusInfo={pending:{label:'รอร้านยืนยัน',icon:'🕒',step:0},confirmed:{label:'ร้านยืนยันแล้ว',icon:'✅',step:0},preparing:{label:'กำลังเตรียม',icon:'☕',step:1},ready:{label:'พร้อมรับสินค้า',icon:'🎉',step:2},on_the_way:{label:'กำลังจัดส่ง',icon:'🛵',step:2},arrived:{label:'ถึงจุดหมายแล้ว',icon:'📍',step:2},completed:{label:'รับสินค้าแล้ว',icon:'💚',step:3},cancelled:{label:'ยกเลิกคำสั่งซื้อ',icon:'❌',step:-1}};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});
+let idToken=null,loading=false;
+async function getToken(){
+ if(!window.liff)throw new Error('ไม่สามารถโหลด LINE ได้ กรุณาเปิดจาก Rich Menu อีกครั้ง');
+ await liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
+ if(!liff.isLoggedIn()){if(!liff.isInClient()){liff.login({redirectUri:location.href});return null;}throw new Error('กรุณาปิดแล้วเปิดหน้านี้จาก Rich Menu อีกครั้ง');}
+ const token=liff.getIDToken();if(!token)throw new Error('ไม่พบ LINE ID Token กรุณาตรวจสอบ LIFF Scope openid และ profile');
+ const cached=(()=>{try{return JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null')}catch(_){return null}})();
+ if(cached?.idToken===token&&Number(cached.expiresAt)>Date.now()+60000)return token;
+ const res=await fetch(LINE_LOGIN_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:token})});
+ const data=await res.json().catch(()=>({}));
+ if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ยืนยันบัญชี LINE ไม่สำเร็จ');
+ sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify({idToken:data.id_token,expiresAt:Number(data.id_token_expires_at)||Date.now()+3600000,profile:data.profile||null}));
+ return data.id_token;
+}
+function renderOrder(o){
+ const st=statusInfo[o.order_status]||{label:o.order_status||'ไม่ทราบสถานะ',icon:'ℹ️',step:0};
+ const items=(o.items||[]).map(it=>'<div>'+esc(it.product_name||'สินค้า')+' × '+Number(it.quantity||0)+(Array.isArray(it.selected_options)&&it.selected_options.length?'<small>'+esc(it.selected_options.map(x=>x.option_name||x.option_value||'').filter(Boolean).join(' · '))+'</small>':'')+'</div>').join('');
+ const progress=st.step<0?'': '<div class="progress">'+[0,1,2,3].map(n=>'<i class="step '+(n<=st.step?'done':'')+'"></i>').join('')+'</div>';
+ const date=new Date(o.created_at).toLocaleString('th-TH',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+ return '<article class="order-card"><div class="card-top"><div><div class="order-no">Order #'+esc(o.order_number)+'</div><div class="order-time">'+date+'</div></div><div class="status '+esc(o.order_status)+'"><span class="status-icon">'+st.icon+'</span>'+esc(st.label)+'</div></div>'+progress+(st.step<0?'<div class="cancel-note">คำสั่งซื้อนี้ถูกยกเลิก หากมีข้อสงสัยกรุณาติดต่อสาขา</div>':'')+'<div class="products">'+(items||'<div>รายละเอียดสินค้าไม่พร้อมใช้งาน</div>')+'</div><div class="card-bottom"><span>'+(o.items||[]).length+' รายการ</span><strong class="total">'+money(o.total_amount)+'</strong></div></article>';
+}
+async function loadOrders(){
+ if(loading)return;loading=true;$('message').textContent='กำลังโหลดสถานะคำสั่งซื้อ…';
+ try{
+  if(!idToken){idToken=await getToken();if(!idToken)return;}
+  const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,limit:10})});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดคำสั่งซื้อได้');
+  const orders=data.orders||[];$('orders').innerHTML=orders.length?orders.map(renderOrder).join(''):'<div class="empty">ยังไม่พบคำสั่งซื้อของคุณ</div>';
+  $('message').textContent=orders.length?'พบ '+orders.length+' คำสั่งซื้อ':'';
+ }catch(e){$('message').textContent=e.message||'เกิดข้อผิดพลาด';}
+ finally{loading=false;}
+}
+$('refresh').addEventListener('click',()=>loadOrders());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadOrders()});
+loadOrders();setInterval(()=>{if(!document.hidden)loadOrders()},15000);
+</script></body></html>
