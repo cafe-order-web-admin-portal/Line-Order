@@ -223,7 +223,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("create-order request failed:", error instanceof Error ? error.message : error);
     const message = error instanceof Error ? error.message : "order_service_error";
-    if (message.includes("LINE_ID_TOKEN")) return response(origin, 401, { success: false, error: "LINE login หมดอายุหรือไม่ถูกต้อง กรุณาเปิด LIFF ใหม่" });
+    if (message.includes("LINE_ID_TOKEN")) return response(origin, 401, { success: false, error: "LINE login หมดอายุหรือไม่ถูกต้อง กรุณาเปิดหน้าเว็บสั่งซื้อใหม่" });
     return response(origin, 500, { success: false, error: "ระบบสั่งซื้อยังตั้งค่าไม่ครบ กรุณาติดต่อร้าน" });
   }
 });
