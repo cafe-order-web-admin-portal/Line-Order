@@ -126,6 +126,7 @@
         <aside class="sidebar">
           <div class="brand"><div class="brand-mark sm">A</div><div><h1>Café Amazon</h1><p>Web Admin Portal</p></div></div>
           <nav class="nav">
+            <a href="./orders.html" class="nav-link-live"><span class="ico">🛒</span>LIVE ORDERS</a>
             ${navButton('dashboard','ภาพรวม','▦')}
             ${navButton('products','จัดการสินค้า','☕')}
             ${isSuper()?navButton('categories','หมวดหมู่','▤'):''}
