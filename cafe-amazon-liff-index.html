@@ -206,13 +206,17 @@ async function submitOrder(){
   const button=$('confirm-order');button.disabled=true;button.textContent='กำลังส่งคำสั่งซื้อ…';
   if(!activeRequestId)activeRequestId=crypto.randomUUID();
   try{
+    // Trigger the browser/OS-native location permission on the customer's first checkout.
+    // Browsers remember an Allow decision; if denied/unavailable, ordering continues normally.
+    const checkoutPosition=await getCurrentPosition().catch(e=>{console.info('Location not shared:',e.message);return null;});
     const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),items})});
     const result=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
     if(!res.ok||result.success!==true)throw new Error(result.error||'ไม่สามารถสร้างคำสั่งซื้อได้');
     cart.clear();activeRequestId=null;updateCart();hideModal('cart-modal');
-    $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: <b>'+money(result.total_amount)+'</b><br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน')+'<div class="receipt-share"><div class="receipt-share-title">📍 ให้ร้านเห็นตำแหน่งของคุณบนแผนที่ไหม?</div><div class="receipt-share-note">กดปุ่มด้านล่างเพื่อแชร์ GPS ให้พนักงานติดตามตำแหน่งสำหรับออเดอร์นี้เท่านั้น ร้านจะเห็นพิกัดเฉพาะพนักงาน และคุณหยุดแชร์ได้ทุกเมื่อ</div><button type="button" class="receipt-share-btn" data-receipt-share="'+esc(result.order_id||'')+'" '+(result.order_id?'':'disabled')+'>📍 แชร์ตำแหน่งของฉันให้ร้าน</button><div class="receipt-share-hint">การแชร์เป็นทางเลือก · ระบบจะขออนุญาต Location จากอุปกรณ์ก่อนเริ่มส่งพิกัด และอัปเดตขณะเปิดหน้า LINE ไว้เท่านั้น</div></div>';
+    $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: '+money(result.total_amount)+'<br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน');
     $('receipt').classList.add('show');
     await loadMyOrders(false);
+    if(result.order_id&&checkoutPosition)await startLocationSharing(result.order_id,true,true,checkoutPosition);
     $('receipt').scrollIntoView({behavior:'smooth',block:'center'});
   }catch(e){console.error('Order submit:',e);$('order-error').textContent=e.message||'เกิดข้อผิดพลาด กรุณาลองอีกครั้ง';}
   finally{button.disabled=false;button.textContent='ยืนยันคำสั่งซื้อ';}
@@ -248,7 +252,7 @@ function renderLocationShare(order){
   const state=share.is_sharing
     ? (fresh?'กำลังแชร์ตำแหน่ง · อัปเดต '+updated.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'แชร์ตำแหน่งไว้ · จุดล่าสุด '+(updated?updated.toLocaleString('th-TH'):'ไม่ทราบเวลา'))
     : 'ยังไม่ได้แชร์ตำแหน่ง';
-  return '<div class="location-box"><div class="location-title">📍 แชร์ตำแหน่งให้ร้าน</div><div class="location-note">เมื่อกดแชร์ อุปกรณ์จะส่งพิกัดให้ร้านเป็นระยะขณะที่เปิดหน้า LINE Web และอนุญาต Location เท่านั้น พิกัดจะแสดงในแผนที่เฉพาะพนักงาน ลูกค้าจะไม่เห็นแผนที่ติดตามของร้าน และคุณหยุดแชร์ได้ทุกเมื่อ</div><div class="location-actions"><button class="location-start" data-share-location="'+esc(order.order_id)+'">'+(share.is_sharing?'แชร์ตำแหน่งต่อ / อัปเดต':'แชร์ตำแหน่งของฉัน')+'</button>'+(share.is_sharing?'<button class="location-stop" data-stop-location="'+esc(order.order_id)+'">หยุดแชร์</button>':'')+'</div><div class="location-state">'+esc(state)+(share.accuracy_m!=null?' · ความแม่นยำประมาณ '+Math.round(Number(share.accuracy_m))+' ม.':'')+'</div></div>';
+  return ''; // Native iOS/Android permission is requested once; no in-page share controls.
 }
 function getCurrentPosition(){
   return new Promise((resolve,reject)=>{
@@ -321,6 +325,10 @@ async function loadMyOrders(scroll=true){
     if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดประวัติได้');
     const orders=data.orders||[];
     lastCustomerOrders=orders;
+    const resumableOrder=orders.find(o=>o.location_share?.is_sharing&&!['completed','cancelled'].includes(o.order_status));
+    if(!activeLocationOrderId&&resumableOrder&&!document.hidden){
+      startLocationSharing(resumableOrder.order_id,true,true).catch(e=>console.info('Location resume skipped:',e.message));
+    }
     if(activeLocationOrderId){
       const activeOrder=orders.find(o=>String(o.order_id)===String(activeLocationOrderId));
       if(!activeOrder||['completed','cancelled'].includes(activeOrder.order_status)){
@@ -347,8 +355,7 @@ $('checkout').onclick=()=>{renderCart();showModal('cart-modal');};
 $('confirm-order').onclick=submitOrder;
 $('track-button').onclick=()=>loadMyOrders(true);
 $('tracking-refresh').onclick=()=>loadMyOrders(false);
-$('tracking-list').addEventListener('click',e=>{const start=e.target.closest('[data-share-location]');if(start){startLocationSharing(start.dataset.shareLocation);return;}const stop=e.target.closest('[data-stop-location]');if(stop){stopLocationSharing(stop.dataset.stopLocation);}});
-$('receipt').addEventListener('click',e=>{const start=e.target.closest('[data-receipt-share]');if(start&&!start.disabled){startLocationSharing(start.dataset.receiptShare);}});
+// Location permission is requested through the native iOS/Android browser prompt during checkout.
 $('refresh-button').onclick=loadMenu;
 document.addEventListener('click',e=>{
   const close=e.target.closest('[data-close]');if(close){hideModal(close.dataset.close);return;}
