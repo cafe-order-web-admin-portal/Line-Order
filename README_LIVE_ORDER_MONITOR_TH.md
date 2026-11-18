@@ -40,6 +40,7 @@ CAFE_AMAZON_ORDER_MANAGEMENT.sql
     Master SQL ไฟล์เดียว รวม Section เดิม 1-24
 assets/cafe-amazon-logo.jpg
     โลโก้ที่ใช้บน Dashboard
+Shop Marker ในแผนที่สร้างด้วย inline SVG ภายใน orders.html ไม่ต้องเพิ่มไฟล์รูปแยก
 supabase/functions/share-customer-location/index.ts
     Edge Function ตรวจสอบ LINE ID Token และรับพิกัด GPS
 supabase/functions/update-order-status/index.ts
@@ -114,9 +115,10 @@ D) บัญชีพนักงาน
 
 E) ตั้งค่าพิกัดร้าน
 ------------------
-Dashboard จะแสดงหมุดร้านและเส้นเชื่อมจากลูกค้าเมื่อ public.branches.latitude
-และ public.branches.longitude ของสาขา PKT001 มีค่าพิกัดจริง
-หากยังเป็น NULL จะไม่สร้างหมุดร้านขึ้นมาเอง เพื่อไม่แสดงตำแหน่งคลาดเคลื่อน
+ตั้งค่าพิกัดร้านใน public.branches สำหรับสาขา PKT001 แล้ว:
+Latitude 7.9153428, Longitude 98.3717597
+Dashboard ใช้พิกัดนี้สร้าง Shop Marker แบบไอคอนหน้าร้าน Café Amazon
+และวาดเส้นประเชื่อมจากตำแหน่งลูกค้าที่กำลังแชร์ GPS
 ระยะทางบน Marker เป็นระยะเส้นตรงโดยประมาณ ไม่ใช่ระยะทางขับรถหรือเส้นทางนำทาง
 
 F) ทดสอบการทำงาน
