@@ -7,6 +7,57 @@ const ALLOWED_ORIGINS = new Set([
 const LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
 const EXPECTED_LINE_LOGIN_CHANNEL_ID = "2012679988";
 const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
+const TRACKING_URL = "https://cafe-order-web-admin-portal.github.io/Line-Order/track-order.html";
+function statusFlex(status: string, orderNumber: string, amount?: string) {
+  const views: Record<string, { title: string; detail: string; icon: string; color: string; bg: string; step: number }> = {
+    pending: { title: "ได้รับคำสั่งซื้อแล้ว", detail: "ร้านกำลังตรวจสอบรายการของคุณ โปรดรอการยืนยันจากพนักงาน", icon: "🕒", color: "#B86A12", bg: "#FFF3DF", step: 0 },
+    confirmed: { title: "ร้านยืนยันออเดอร์แล้ว", detail: "ขอบคุณครับ ร้านรับออเดอร์เรียบร้อยแล้ว บาริสต้าจะเริ่มเตรียมเครื่องดื่มให้คุณ", icon: "✅", color: "#167347", bg: "#E8F6ED", step: 1 },
+    preparing: { title: "กำลังปรุงเครื่องดื่ม", detail: "บาริสต้ากำลังตั้งใจเตรียมเครื่องดื่มแก้วโปรดของคุณ อีกไม่นานพร้อมเสิร์ฟครับ", icon: "☕", color: "#7650A8", bg: "#F2ECFA", step: 2 },
+    ready: { title: "เครื่องดื่มพร้อมแล้ว!", detail: "ออเดอร์ของคุณพร้อมรับที่ร้านแล้ว กรุณาติดต่อพนักงานและแจ้งเลข Order นี้ครับ", icon: "🎉", color: "#087A49", bg: "#E5F7EC", step: 3 },
+    on_the_way: { title: "กำลังจัดส่งถึงคุณ", detail: "ออเดอร์ออกเดินทางแล้ว โปรดเตรียมรับเครื่องดื่มจากพนักงานจัดส่งครับ", icon: "🛵", color: "#087C83", bg: "#E5F7F7", step: 3 },
+    arrived: { title: "ไรเดอร์ถึงจุดหมายแล้ว", detail: "พนักงานจัดส่งถึงจุดหมายแล้ว กรุณาตรวจรับเครื่องดื่มของคุณครับ", icon: "📍", color: "#087C83", bg: "#E5F7F7", step: 3 },
+    completed: { title: "ส่งมอบออเดอร์เรียบร้อย", detail: "ขอบคุณที่แวะมาเติมความสดชื่นกับ Café Amazon หวังว่าจะได้ดูแลคุณอีกครั้งครับ 💚", icon: "💚", color: "#167347", bg: "#E8F6ED", step: 4 },
+    cancelled: { title: "คำสั่งซื้อถูกยกเลิก", detail: "ออเดอร์นี้ถูกยกเลิกแล้ว หากต้องการสอบถามรายละเอียดเพิ่มเติม กรุณาติดต่อพนักงานหน้าร้าน", icon: "✖", color: "#B33B32", bg: "#FCEDEC", step: -1 },
+  };
+  const v = views[status] ?? { title: "สถานะออเดอร์อัปเดตแล้ว", detail: "ตรวจสอบรายละเอียดคำสั่งซื้อได้จากปุ่มด้านล่าง", icon: "ℹ️", color: "#167347", bg: "#E8F6ED", step: 0 };
+  const steps = ["รับออเดอร์", "ยืนยัน", "กำลังเตรียม", "พร้อมรับ"];
+  const progress = v.step < 0 ? [] : steps.map((label, i) => ({
+    type: "box", layout: "vertical", flex: 1, spacing: "xs",
+    contents: [
+      { type: "box", layout: "vertical", height: "5px", cornerRadius: "sm", backgroundColor: i <= Math.min(v.step, 3) ? v.color : "#E6ECE8", contents: [] },
+      { type: "text", text: label, size: "xxs", color: i <= Math.min(v.step, 3) ? v.color : "#89948C", align: "center", wrap: true }
+    ]
+  }));
+  const body: Record<string, unknown>[] = [
+    { type: "text", text: "Café Amazon", size: "sm", weight: "bold", color: "#075B39" },
+    { type: "text", text: v.icon + "  " + v.title, size: "xl", weight: "bold", color: v.color, wrap: true, margin: "md" },
+    { type: "text", text: v.detail, size: "sm", color: "#526158", wrap: true, margin: "md" },
+    { type: "separator", margin: "lg", color: "#E8EEE9" },
+    { type: "text", text: "หมายเลขคำสั่งซื้อ", size: "xs", color: "#829087", margin: "lg" },
+    { type: "text", text: orderNumber, size: "md", weight: "bold", color: "#173D29", wrap: true, margin: "xs" },
+  ];
+  if (amount) body.push({ type: "box", layout: "horizontal", margin: "md", contents: [
+    { type: "text", text: "ยอดรวม", size: "sm", color: "#66736A", flex: 1 },
+    { type: "text", text: amount, size: "lg", weight: "bold", color: "#087A49", align: "end" }
+  ]});
+  if (progress.length) body.push({ type: "box", layout: "horizontal", spacing: "xs", margin: "xl", contents: progress });
+  return {
+    type: "flex",
+    altText: v.icon + " " + v.title + " | Order " + orderNumber,
+    contents: {
+      type: "bubble", size: "mega",
+      header: { type: "box", layout: "vertical", paddingAll: "14px", backgroundColor: v.bg, contents: [
+        { type: "text", text: "ORDER UPDATE  •  TALAT THAWEE SAMAN", size: "xxs", weight: "bold", color: v.color, wrap: true }
+      ]},
+      body: { type: "box", layout: "vertical", paddingAll: "16px", contents: body },
+      footer: { type: "box", layout: "vertical", paddingAll: "12px", contents: [
+        { type: "button", style: "primary", color: "#087A49", height: "md", action: { type: "uri", label: "ติดตามสถานะ Order", uri: TRACKING_URL } },
+        { type: "text", text: "ขอบคุณที่ใช้บริการ Café Amazon 💚", size: "xxs", color: "#89948C", align: "center", margin: "md", wrap: true }
+      ]}
+    }
+  };
+}
+
 
 function cors(origin: string | null): HeadersInit {
   const allowed = origin && ALLOWED_ORIGINS.has(origin);
@@ -78,28 +129,16 @@ async function verifyLineIdToken(idToken: string, channelId: string) {
   }
 }
 
-async function pushLineMessage(to: string, text: string, accessToken: string): Promise<boolean> {
+async function pushLineMessage(to: string, message: Record<string, unknown>, accessToken: string): Promise<boolean> {
   try {
     const result = await fetch(LINE_PUSH_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        to,
-        messages: [{ type: "text", text }],
-      }),
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${accessToken}` },
+      body: JSON.stringify({ to, messages: [message] }),
     });
-    if (!result.ok) {
-      console.error("LINE push message failed:", result.status, await result.text());
-      return false;
-    }
+    if (!result.ok) { console.error("LINE push message failed:", result.status, await result.text()); return false; }
     return true;
-  } catch (error) {
-    console.error("LINE push request failed:", error);
-    return false;
-  }
+  } catch (error) { console.error("LINE push request failed:", error); return false; }
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -201,7 +240,7 @@ Deno.serve(async (req: Request) => {
         const total = Number(result.total_amount ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         customerNotified = await pushLineMessage(
           lineClaims.sub,
-          `Café Amazon ตลาดทวีสมาน ☕\nรับคำสั่งซื้อแล้ว\nเลขที่: ${orderNumber}\nยอดรวม: ฿${total}\nสถานะ: รอยืนยันจากร้าน`,
+          statusFlex("pending", orderNumber, "฿" + total),
           accessToken,
         );
         const staffRecipient = Deno.env.get("LINE_ORDER_NOTIFY_TO")?.trim();
