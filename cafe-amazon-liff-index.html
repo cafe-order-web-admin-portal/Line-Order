@@ -98,7 +98,8 @@ async function establishLineSession(){
   const res=await fetch(LINE_LOGIN_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({code,code_verifier:pending.verifier,nonce:pending.nonce,redirect_uri:LINE_REDIRECT_URI})});
   const data=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
   if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ไม่สามารถยืนยัน LINE Login ได้');
-  const s={idToken:data.id_token,expiresAt:Date.now()+Math.max(60,Number(data.expires_in||3600)-60)*1000,profile:data.profile||null};
+  const tokenExpiry=Number(data.id_token_expires_at)||Date.now()+3600000;
+  const s={idToken:data.id_token,expiresAt:Math.min(tokenExpiry-60000,Date.now()+Math.max(60,Number(data.expires_in||3600)-60)*1000),profile:data.profile||null};
   sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(s));sessionStorage.removeItem('ca_line_oauth_pending');history.replaceState({},document.title,LINE_REDIRECT_URI);profile=s.profile;return s;
  }
  const s=getLineSession();if(s)return s;await beginLineLogin();return null;
