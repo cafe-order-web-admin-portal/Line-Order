@@ -70,13 +70,6 @@ let optionGroups=[],optionChoices=[],productGroupLinks=[],productOptionLinks=[],
 let activeRequestId=null;
 let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
 let lastCustomerOrders=[];
-function locationConsentKey(){
-  let userId=profile?.userId||'line-user';
-  userId=profile?.userId||userId;
-  return 'ca_location_auto_consent_'+String(userId);
-}
-function getLocationConsent(){try{return localStorage.getItem(locationConsentKey())||'';}catch(e){return '';}}
-function setLocationConsent(value){try{localStorage.setItem(locationConsentKey(),value);}catch(e){console.warn('Cannot save location consent:',e);}}
 
 function base64Url(bytes){let binary='';bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 function randomToken(size=32){const bytes=new Uint8Array(size);crypto.getRandomValues(bytes);return base64Url(bytes);}
@@ -290,7 +283,6 @@ async function startLocationSharing(orderId,consentAlreadyGiven=false,silent=fal
     if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);
     if(activeLocationOrderId&&activeLocationOrderId!==orderId){await postLocation('stop',activeLocationOrderId).catch(()=>{});}
     const result=await postLocation('start',orderId,position);
-    setLocationConsent('granted');
     activeLocationOrderId=orderId;lastLocationSentAt=Date.now();lastSentLocation={latitude:position.coords.latitude,longitude:position.coords.longitude};
     locationWatchId=navigator.geolocation.watchPosition(async next=>{
       if(locationSending||activeLocationOrderId!==orderId)return;
@@ -311,7 +303,6 @@ async function startLocationSharing(orderId,consentAlreadyGiven=false,silent=fal
 async function stopLocationSharing(orderId){
   try{
     await postLocation('stop',orderId);
-    setLocationConsent('declined');
     if(activeLocationOrderId===orderId){if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;activeLocationOrderId=null;lastSentLocation=null;lastLocationSentAt=0;}
     const receiptShare=$('receipt').querySelector('[data-receipt-share="'+orderId+'"]');
     if(receiptShare){receiptShare.textContent='📍 แชร์ตำแหน่งของฉันให้ร้าน';receiptShare.disabled=false;}
