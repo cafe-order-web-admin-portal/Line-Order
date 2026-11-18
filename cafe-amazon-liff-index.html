@@ -26,6 +26,15 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 @media(min-width:600px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.photo{height:145px}.modal{align-items:center;justify-content:center}.sheet{max-width:520px;border-radius:20px}}
 
 .location-box{margin-top:12px;padding:12px;border:1px solid #dce8de;background:#f4faf5;border-radius:12px}
+.location-prompt-sheet{text-align:center;padding:24px 22px calc(22px + env(safe-area-inset-bottom))}
+.location-prompt-icon{width:58px;height:58px;margin:2px auto 12px;display:grid;place-items:center;border-radius:50%;background:#e6f5ea;font-size:29px}
+.location-prompt-sheet h2{font:700 19px Prompt;color:#155b39;margin:0 0 8px}
+.location-prompt-order{font-weight:700;color:#252d27;margin:0 0 8px}
+.location-prompt-copy{font-size:13px;line-height:1.6;color:#344d3b;margin:0 0 9px}
+.location-prompt-note{font-size:11px;line-height:1.55;color:#7a8179;margin:0 0 16px}
+.location-prompt-yes,.location-prompt-later{width:100%;border-radius:12px;padding:13px 14px;font:700 14px 'IBM Plex Sans Thai',sans-serif}
+.location-prompt-yes{background:#176b45;color:#fff;border:0}
+.location-prompt-later{margin-top:8px;background:#fff;color:#5c655e;border:1px solid #e1e7e1}
 .location-title{font-size:13px;font-weight:600;color:var(--green);margin-bottom:5px}
 .location-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:9px}
 .location-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -44,6 +53,17 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 <main>
   <p class="status" id="status">กำลังเชื่อมต่อระบบ…</p>
   <div class="receipt" id="receipt"></div>
+  <div class="modal" id="location-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="location-prompt-title">
+    <div class="sheet location-prompt-sheet">
+      <div class="location-prompt-icon">📍</div>
+      <h2 id="location-prompt-title">แชร์ตำแหน่งของฉันให้ร้านไหม?</h2>
+      <p class="location-prompt-order" id="location-prompt-order"></p>
+      <p class="location-prompt-copy">Café Amazon จะเห็นตำแหน่งล่าสุดของคุณบนแผนที่สำหรับติดตามออเดอร์นี้ เฉพาะพนักงานของสาขาเท่านั้นที่เห็นตำแหน่ง</p>
+      <p class="location-prompt-note">ระบบจะอัปเดตตำแหน่งขณะที่เปิดหน้า LINE นี้และอนุญาต Location คุณหยุดแชร์ได้ทุกเมื่อ</p>
+      <button type="button" class="location-prompt-yes" id="location-prompt-share">📍 แชร์ตำแหน่งของฉัน</button>
+      <button type="button" class="location-prompt-later" id="location-prompt-later">ยังไม่แชร์ตอนนี้</button>
+    </div>
+  </div>
   <div class="section-title">เลือกหมวดหมู่</div><div class="chips" id="categories"><button class="chip active" data-cat="all">ทั้งหมด</button></div>
   <div class="section-title">เมนู Café Amazon</div><div class="grid" id="products"><div class="empty">กำลังโหลดเมนู…</div></div>
   <section id="tracking-section" hidden><div class="section-title">คำสั่งซื้อของฉัน</div><div class="tracking-tools"><span class="hint">สถานะจะอัปเดตอัตโนมัติทุก 15 วินาที</span><button id="tracking-refresh" class="tracking-refresh">↻ อัปเดตตอนนี้</button></div><div id="tracking-list" class="tracking-list"><div class="empty">กดติดตามคำสั่งซื้อเพื่อดูสถานะ</div></div></section>
@@ -67,6 +87,7 @@ let profile=null,allProducts=[],activeCategory='all',cart=new Map();
 let optionGroups=[],optionChoices=[],productGroupLinks=[],productOptionLinks=[],currentProduct=null;
 let activeRequestId=null;
 let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
+let lastCustomerOrders=[], locationPromptShown=false, pendingLocationPromptOrderId=null;
 const $=id=>document.getElementById(id);
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -98,6 +119,7 @@ async function start(){
     if(profile?.displayName)$('customer-name').value=profile.displayName;
   }catch(e){console.error('LIFF init:',e);setStatus('เริ่มต้น LINE LIFF ไม่สำเร็จ: '+(e.message||e));}
   await loadMenu();
+  await promptLocationSharingOnOpen();
 }
 async function loadMenu(){
   setStatus('กำลังค้นหาสาขา '+BRANCH_CODE+'…');
@@ -195,6 +217,23 @@ async function submitOrder(){
   }catch(e){console.error('Order submit:',e);$('order-error').textContent=e.message||'เกิดข้อผิดพลาด กรุณาลองอีกครั้ง';}
   finally{button.disabled=false;button.textContent='ยืนยันคำสั่งซื้อ';}
 }
+async function promptLocationSharingOnOpen(){
+  if(locationPromptShown||!liff.isLoggedIn())return;
+  locationPromptShown=true;
+  try{
+    await loadMyOrders(false);
+    const activeOrders=lastCustomerOrders.filter(order=>!['completed','cancelled'].includes(order.order_status));
+    if(!activeOrders.length)return;
+    // A single phone location watcher is associated with the latest active order.
+    const order=activeOrders.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+    if(order.location_share?.is_sharing&&activeLocationOrderId===order.order_id)return;
+    pendingLocationPromptOrderId=order.order_id;
+    $('location-prompt-order').textContent='สำหรับออเดอร์ '+(order.order_number||'ล่าสุด');
+    $('location-prompt-share').disabled=false;
+    $('location-prompt-share').textContent='📍 แชร์ตำแหน่งของฉัน';
+    showModal('location-prompt-modal');
+  }catch(e){console.warn('Location prompt on open:',e.message||e);}
+}
 function renderCustomerTimeline(order){
   const history=Array.isArray(order.status_history)?order.status_history:[];
   const timeByStatus=new Map();
@@ -254,8 +293,8 @@ function distanceMeters(a,b){
   const x=Math.sin(dLat/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(dLon/2)**2;
   return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
-async function startLocationSharing(orderId){
-  if(!confirm('อนุญาตให้ Café Amazon ตลาดทวีสมานเห็นตำแหน่งของคุณสำหรับคำสั่งซื้อนี้หรือไม่?\nระบบจะอัปเดตขณะเปิดหน้า LIFF ไว้ และคุณหยุดแชร์ได้ทุกเมื่อ'))return;
+async function startLocationSharing(orderId,consentAlreadyGiven=false){
+  if(!consentAlreadyGiven&&!confirm('อนุญาตให้ Café Amazon ตลาดทวีสมานเห็นตำแหน่งของคุณสำหรับคำสั่งซื้อนี้หรือไม่?\nระบบจะอัปเดตขณะเปิดหน้า LIFF ไว้ และคุณหยุดแชร์ได้ทุกเมื่อ'))return;
   try{
     if(!liff.isLoggedIn()){liff.login({redirectUri:window.location.href});return;}
     const position=await getCurrentPosition();
@@ -300,6 +339,7 @@ async function loadMyOrders(scroll=true){
     const data=await res.json().catch(()=>({error:'invalid_response'}));
     if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดประวัติได้');
     const orders=data.orders||[];
+    lastCustomerOrders=orders;
     if(activeLocationOrderId){
       const activeOrder=orders.find(o=>String(o.order_id)===String(activeLocationOrderId));
       if(!activeOrder||['completed','cancelled'].includes(activeOrder.order_status)){
@@ -328,6 +368,8 @@ $('track-button').onclick=()=>loadMyOrders(true);
 $('tracking-refresh').onclick=()=>loadMyOrders(false);
 $('tracking-list').addEventListener('click',e=>{const start=e.target.closest('[data-share-location]');if(start){startLocationSharing(start.dataset.shareLocation);return;}const stop=e.target.closest('[data-stop-location]');if(stop){stopLocationSharing(stop.dataset.stopLocation);}});
 $('receipt').addEventListener('click',e=>{const start=e.target.closest('[data-receipt-share]');if(start&&!start.disabled){startLocationSharing(start.dataset.receiptShare);}});
+$('location-prompt-share').addEventListener('click',async()=>{const orderId=pendingLocationPromptOrderId;if(!orderId)return;const button=$('location-prompt-share');button.disabled=true;button.textContent='กำลังขออนุญาต Location…';hideModal('location-prompt-modal');await startLocationSharing(orderId,true);button.disabled=false;button.textContent='📍 แชร์ตำแหน่งของฉัน';pendingLocationPromptOrderId=null;});
+$('location-prompt-later').addEventListener('click',()=>{pendingLocationPromptOrderId=null;hideModal('location-prompt-modal');});
 $('refresh-button').onclick=loadMenu;
 document.addEventListener('click',e=>{
   const close=e.target.closest('[data-close]');if(close){hideModal(close.dataset.close);return;}
