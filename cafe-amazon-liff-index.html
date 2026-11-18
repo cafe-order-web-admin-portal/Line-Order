@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#5b3a27"><title>Café Amazon | สั่งเครื่องดื่ม</title>
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
 <script src="./assets/config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -53,17 +52,6 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 <main>
   <p class="status" id="status">กำลังเชื่อมต่อระบบ…</p>
   <div class="receipt" id="receipt"></div>
-  <div class="modal" id="location-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="location-prompt-title">
-    <div class="sheet location-prompt-sheet">
-      <div class="location-prompt-icon">📍</div>
-      <h2 id="location-prompt-title">อนุญาตแชร์ตำแหน่งอัตโนมัติไหม?</h2>
-      <p class="location-prompt-order" id="location-prompt-order">ตั้งค่าครั้งแรกเพียงครั้งเดียว</p>
-      <p class="location-prompt-copy">เมื่อคุณสั่งเครื่องดื่ม ระบบจะส่งตำแหน่ง GPS ให้ Café Amazon โดยอัตโนมัติ เพื่อให้พนักงานติดตามออเดอร์บนแผนที่ เฉพาะพนักงานของสาขาเท่านั้นที่เห็นตำแหน่ง</p>
-      <p class="location-prompt-note">การอัปเดตทำงานขณะเปิดหน้า LINE นี้และอนุญาต Location คุณหยุดแชร์ได้ทุกเมื่อจากรายการคำสั่งซื้อ</p>
-      <button type="button" class="location-prompt-yes" id="location-prompt-share">อนุญาตและเปิดแชร์อัตโนมัติ</button>
-      <button type="button" class="location-prompt-later" id="location-prompt-later">ยังไม่แชร์ตอนนี้</button>
-    </div>
-  </div>
   <div class="section-title">เลือกหมวดหมู่</div><div class="chips" id="categories"><button class="chip active" data-cat="all">ทั้งหมด</button></div>
   <div class="section-title">เมนู Café Amazon</div><div class="grid" id="products"><div class="empty">กำลังโหลดเมนู…</div></div>
   <section id="tracking-section" hidden><div class="section-title">คำสั่งซื้อของฉัน</div><div class="tracking-tools"><span class="hint">สถานะจะอัปเดตอัตโนมัติทุก 15 วินาที</span><button id="tracking-refresh" class="tracking-refresh">↻ อัปเดตตอนนี้</button></div><div id="tracking-list" class="tracking-list"><div class="empty">กดติดตามคำสั่งซื้อเพื่อดูสถานะ</div></div></section>
@@ -76,7 +64,10 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 
 <script>
 'use strict';
-const LIFF_ID='2012679988-ORHhLD7I';
+const LINE_LOGIN_CHANNEL_ID='2012679988';
+const LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login';
+const LINE_REDIRECT_URI=window.location.origin+window.location.pathname;
+const LINE_SESSION_KEY='ca_line_web_session_v1';
 const BRANCH_CODE='PKT001';
 const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
 const TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders';
@@ -87,14 +78,41 @@ let profile=null,allProducts=[],activeCategory='all',cart=new Map();
 let optionGroups=[],optionChoices=[],productGroupLinks=[],productOptionLinks=[],currentProduct=null;
 let activeRequestId=null;
 let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
-let lastCustomerOrders=[], locationPromptShown=false, pendingLocationPromptOrderId=null;
+let lastCustomerOrders=[];
 function locationConsentKey(){
   let userId=profile?.userId||'line-user';
-  try{userId=profile?.userId||liff.getDecodedIDToken?.()?.sub||userId;}catch(e){}
+  userId=profile?.userId||userId;
   return 'ca_location_auto_consent_'+String(userId);
 }
 function getLocationConsent(){try{return localStorage.getItem(locationConsentKey())||'';}catch(e){return '';}}
 function setLocationConsent(value){try{localStorage.setItem(locationConsentKey(),value);}catch(e){console.warn('Cannot save location consent:',e);}}
+
+function base64Url(bytes){let binary='';bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');}
+function randomToken(size=32){const bytes=new Uint8Array(size);crypto.getRandomValues(bytes);return base64Url(bytes);}
+async function sha256Base64Url(value){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return base64Url(new Uint8Array(digest));}
+function getLineSession(){try{const s=JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null');if(!s?.idToken||Number(s.expiresAt)<=Date.now()+60000)return null;profile=s.profile||null;return s;}catch(_){return null;}}
+function getLineIdToken(){return getLineSession()?.idToken||null;}
+async function beginLineLogin(){
+ const state=randomToken(),nonce=randomToken(),verifier=randomToken(48),challenge=await sha256Base64Url(verifier);
+ sessionStorage.setItem('ca_line_oauth_pending',JSON.stringify({state,nonce,verifier,createdAt:Date.now()}));
+ const p=new URLSearchParams({response_type:'code',client_id:LINE_LOGIN_CHANNEL_ID,redirect_uri:LINE_REDIRECT_URI,state,scope:'openid profile',nonce,code_challenge:challenge,code_challenge_method:'S256'});
+ location.assign('https://access.line.me/oauth2/v2.1/authorize?'+p.toString());
+}
+async function establishLineSession(){
+ const p=new URLSearchParams(location.search),code=p.get('code'),state=p.get('state');
+ if(p.get('error'))throw new Error('LINE Login ถูกยกเลิกหรือไม่สำเร็จ');
+ if(code){
+  let pending=null;try{pending=JSON.parse(sessionStorage.getItem('ca_line_oauth_pending')||'null');}catch(_){}
+  if(!pending||!state||state!==pending.state||Date.now()-pending.createdAt>600000)throw new Error('การยืนยัน LINE Login ไม่ถูกต้องหรือหมดเวลา');
+  const res=await fetch(LINE_LOGIN_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({code,code_verifier:pending.verifier,nonce:pending.nonce,redirect_uri:LINE_REDIRECT_URI})});
+  const data=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
+  if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ไม่สามารถยืนยัน LINE Login ได้');
+  const s={idToken:data.id_token,expiresAt:Date.now()+Math.max(60,Number(data.expires_in||3600)-60)*1000,profile:data.profile||null};
+  sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(s));sessionStorage.removeItem('ca_line_oauth_pending');history.replaceState({},document.title,LINE_REDIRECT_URI);profile=s.profile;return s;
+ }
+ const s=getLineSession();if(s)return s;await beginLineLogin();return null;
+}
+
 const $=id=>document.getElementById(id);
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -114,19 +132,10 @@ function getProductGroups(productId){
 function optionDelta(ids){return selectedOptions(ids).reduce((sum,o)=>sum+Number(o.price_delta||0),0)}
 function cartLineUnitPrice(line){return Number(line.product.price)+optionDelta(line.optionIds)}
 async function start(){
-  if(!db){setStatus('ไม่พบการตั้งค่า Supabase — ตรวจสอบ assets/config.js');$('products').innerHTML='<div class="empty">ยังเชื่อมต่อฐานข้อมูลไม่ได้</div>';return;}
-  try{
-    await liff.init({liffId:LIFF_ID});
-    if(!liff.isLoggedIn()){
-      setStatus('กำลังเข้าสู่ระบบ LINE…');
-      liff.login({redirectUri:window.location.href});
-      return;
-    }
-    profile=await liff.getProfile().catch(()=>null);
-    if(profile?.displayName)$('customer-name').value=profile.displayName;
-  }catch(e){console.error('LIFF init:',e);setStatus('เริ่มต้น LINE LIFF ไม่สำเร็จ: '+(e.message||e));}
-  await loadMenu();
-  await promptLocationSharingOnOpen();
+ if(!db){setStatus('ไม่พบการตั้งค่า Supabase — ตรวจสอบ assets/config.js');$('products').innerHTML='<div class="empty">ยังเชื่อมต่อฐานข้อมูลไม่ได้</div>';return;}
+ try{setStatus('กำลังเข้าสู่ระบบ LINE…');const session=await establishLineSession();if(!session)return;if(profile?.displayName)$('customer-name').value=profile.displayName;}
+ catch(e){console.error('LINE Login:',e);setStatus(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ');$('products').innerHTML='<div class="empty">'+esc(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ')+'<br><button class="primary" style="margin-top:12px" onclick="location.reload()">ลองอีกครั้ง</button></div>';return;}
+ await loadMenu();
 }
 async function loadMenu(){
   setStatus('กำลังค้นหาสาขา '+BRANCH_CODE+'…');
@@ -205,9 +214,8 @@ function renderCart(){
 }
 async function submitOrder(){
   $('order-error').textContent='';
-  if(!liff.isLoggedIn()){liff.login({redirectUri:window.location.href});return;}
-  const idToken=liff.getIDToken();
-  if(!idToken){$('order-error').textContent='ไม่พบ LINE ID Token กรุณาตรวจสอบ LIFF Scope ว่ามี openid';return;}
+  const idToken=getLineIdToken();
+  if(!idToken){$('order-error').textContent='เซสชัน LINE หมดอายุ กรุณารีเฟรชหน้าเพื่อเข้าสู่ระบบอีกครั้ง';return;}
   if(!cart.size){$('order-error').textContent='กรุณาเลือกสินค้าอย่างน้อย 1 รายการ';return;}
   const items=[...cart.values()].map(x=>({product_id:x.product.id,quantity:x.qty,option_ids:x.optionIds}));
   const button=$('confirm-order');button.disabled=true;button.textContent='กำลังส่งคำสั่งซื้อ…';
@@ -220,45 +228,9 @@ async function submitOrder(){
     $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: <b>'+money(result.total_amount)+'</b><br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน')+'<div class="receipt-share"><div class="receipt-share-title">📍 ให้ร้านเห็นตำแหน่งของคุณบนแผนที่ไหม?</div><div class="receipt-share-note">กดปุ่มด้านล่างเพื่อแชร์ GPS ให้พนักงานติดตามตำแหน่งสำหรับออเดอร์นี้เท่านั้น ร้านจะเห็นพิกัดเฉพาะพนักงาน และคุณหยุดแชร์ได้ทุกเมื่อ</div><button type="button" class="receipt-share-btn" data-receipt-share="'+esc(result.order_id||'')+'" '+(result.order_id?'':'disabled')+'>📍 แชร์ตำแหน่งของฉันให้ร้าน</button><div class="receipt-share-hint">การแชร์เป็นทางเลือก · ระบบจะขออนุญาต Location จากอุปกรณ์ก่อนเริ่มส่งพิกัด และอัปเดตขณะเปิดหน้า LINE ไว้เท่านั้น</div></div>';
     $('receipt').classList.add('show');
     await loadMyOrders(false);
-    if(getLocationConsent()==='granted'){
-      await startLocationSharing(result.order_id,true,true);
-    }
     $('receipt').scrollIntoView({behavior:'smooth',block:'center'});
   }catch(e){console.error('Order submit:',e);$('order-error').textContent=e.message||'เกิดข้อผิดพลาด กรุณาลองอีกครั้ง';}
   finally{button.disabled=false;button.textContent='ยืนยันคำสั่งซื้อ';}
-}
-async function promptLocationSharingOnOpen(){
-  if(locationPromptShown||!liff.isLoggedIn())return;
-  locationPromptShown=true;
-  try{
-    await loadMyOrders(false);
-    const activeOrders=lastCustomerOrders
-      .filter(order=>!['completed','cancelled'].includes(order.order_status))
-      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-    const latestOrder=activeOrders[0]||null;
-    const consent=getLocationConsent();
-
-    // Customers who had already shared GPS before this preference existed are treated as opted in.
-    if(!consent&&latestOrder?.location_share?.is_sharing)setLocationConsent('granted');
-    const savedConsent=getLocationConsent();
-
-    if(savedConsent==='granted'){
-      if(latestOrder){
-        pendingLocationPromptOrderId=latestOrder.order_id;
-        await startLocationSharing(latestOrder.order_id,true,true);
-      }
-      return;
-    }
-    if(savedConsent==='declined')return;
-
-    pendingLocationPromptOrderId=latestOrder?.order_id||null;
-    $('location-prompt-order').textContent=latestOrder
-      ? 'ออเดอร์ที่กำลังดำเนินการ: '+(latestOrder.order_number||'ออเดอร์ล่าสุด')
-      : 'ตั้งค่าสำหรับการสั่งซื้อครั้งต่อไป';
-    $('location-prompt-share').disabled=false;
-    $('location-prompt-share').textContent='อนุญาตและเปิดแชร์อัตโนมัติ';
-    showModal('location-prompt-modal');
-  }catch(e){console.warn('Location auto-share setup:',e.message||e);}
 }
 function renderCustomerTimeline(order){
   const history=Array.isArray(order.status_history)?order.status_history:[];
@@ -291,7 +263,7 @@ function renderLocationShare(order){
   const state=share.is_sharing
     ? (fresh?'กำลังแชร์ตำแหน่ง · อัปเดต '+updated.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'แชร์ตำแหน่งไว้ · จุดล่าสุด '+(updated?updated.toLocaleString('th-TH'):'ไม่ทราบเวลา'))
     : 'ยังไม่ได้แชร์ตำแหน่ง';
-  return '<div class="location-box"><div class="location-title">📍 แชร์ตำแหน่งให้ร้าน</div><div class="location-note">เมื่อกดแชร์ อุปกรณ์จะส่งพิกัดให้ร้านเป็นระยะขณะที่เปิดหน้า LIFF และอนุญาต Location เท่านั้น พิกัดจะแสดงในแผนที่เฉพาะพนักงาน ลูกค้าจะไม่เห็นแผนที่ติดตามของร้าน และคุณหยุดแชร์ได้ทุกเมื่อ</div><div class="location-actions"><button class="location-start" data-share-location="'+esc(order.order_id)+'">'+(share.is_sharing?'แชร์ตำแหน่งต่อ / อัปเดต':'แชร์ตำแหน่งของฉัน')+'</button>'+(share.is_sharing?'<button class="location-stop" data-stop-location="'+esc(order.order_id)+'">หยุดแชร์</button>':'')+'</div><div class="location-state">'+esc(state)+(share.accuracy_m!=null?' · ความแม่นยำประมาณ '+Math.round(Number(share.accuracy_m))+' ม.':'')+'</div></div>';
+  return '<div class="location-box"><div class="location-title">📍 แชร์ตำแหน่งให้ร้าน</div><div class="location-note">เมื่อกดแชร์ อุปกรณ์จะส่งพิกัดให้ร้านเป็นระยะขณะที่เปิดหน้า LINE Web และอนุญาต Location เท่านั้น พิกัดจะแสดงในแผนที่เฉพาะพนักงาน ลูกค้าจะไม่เห็นแผนที่ติดตามของร้าน และคุณหยุดแชร์ได้ทุกเมื่อ</div><div class="location-actions"><button class="location-start" data-share-location="'+esc(order.order_id)+'">'+(share.is_sharing?'แชร์ตำแหน่งต่อ / อัปเดต':'แชร์ตำแหน่งของฉัน')+'</button>'+(share.is_sharing?'<button class="location-stop" data-stop-location="'+esc(order.order_id)+'">หยุดแชร์</button>':'')+'</div><div class="location-state">'+esc(state)+(share.accuracy_m!=null?' · ความแม่นยำประมาณ '+Math.round(Number(share.accuracy_m))+' ม.':'')+'</div></div>';
 }
 function getCurrentPosition(){
   return new Promise((resolve,reject)=>{
@@ -303,7 +275,7 @@ function getCurrentPosition(){
   });
 }
 async function postLocation(action,orderId,position=null){
-  const token=liff.getIDToken();if(!token)throw new Error('ไม่พบ LINE ID Token กรุณาเปิด LIFF ใหม่');
+  const token=getLineIdToken();if(!token)throw new Error('เซสชัน LINE หมดอายุ กรุณารีเฟรชหน้าเพื่อเข้าสู่ระบบอีกครั้ง');
   const coords=position?.coords;
   const response=await fetch(LOCATION_FUNCTION_URL,{
     method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
@@ -320,9 +292,8 @@ function distanceMeters(a,b){
   return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 async function startLocationSharing(orderId,consentAlreadyGiven=false,silent=false,initialPosition=null){
-  if(!consentAlreadyGiven&&getLocationConsent()!=='granted'&&!confirm('อนุญาตให้ Café Amazon ตลาดทวีสมานเห็นตำแหน่งของคุณสำหรับคำสั่งซื้อนี้หรือไม่?\nระบบจะอัปเดตขณะเปิดหน้า LIFF ไว้ และคุณหยุดแชร์ได้ทุกเมื่อ'))return;
   try{
-    if(!liff.isLoggedIn()){liff.login({redirectUri:window.location.href});return;}
+    const sessionToken=getLineIdToken();if(!sessionToken)throw new Error('เซสชัน LINE หมดอายุ กรุณารีเฟรชหน้าเพื่อเข้าสู่ระบบอีกครั้ง');
     const position=initialPosition||await getCurrentPosition();
     if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);
     if(activeLocationOrderId&&activeLocationOrderId!==orderId){await postLocation('stop',activeLocationOrderId).catch(()=>{});}
@@ -358,8 +329,7 @@ async function stopLocationSharing(orderId){
 
 async function loadMyOrders(scroll=true){
   if(trackingLoading)return;
-  if(!liff.isLoggedIn()){liff.login({redirectUri:window.location.href});return;}
-  const token=liff.getIDToken();if(!token){setStatus('ไม่พบ LINE ID Token — ตรวจสอบ LIFF Scope openid');return;}
+  const token=getLineIdToken();if(!token){setStatus('เซสชัน LINE หมดอายุ กรุณารีเฟรชหน้าเพื่อเข้าสู่ระบบอีกครั้ง');return;}
   trackingLoading=true;
   $('tracking-section').hidden=false;$('tracking-list').innerHTML='<div class="empty">กำลังโหลดประวัติคำสั่งซื้อ…</div>';
   try{
@@ -396,34 +366,6 @@ $('track-button').onclick=()=>loadMyOrders(true);
 $('tracking-refresh').onclick=()=>loadMyOrders(false);
 $('tracking-list').addEventListener('click',e=>{const start=e.target.closest('[data-share-location]');if(start){startLocationSharing(start.dataset.shareLocation);return;}const stop=e.target.closest('[data-stop-location]');if(stop){stopLocationSharing(stop.dataset.stopLocation);}});
 $('receipt').addEventListener('click',e=>{const start=e.target.closest('[data-receipt-share]');if(start&&!start.disabled){startLocationSharing(start.dataset.receiptShare);}});
-$('location-prompt-share').addEventListener('click',async()=>{
-  const orderId=pendingLocationPromptOrderId;
-  const button=$('location-prompt-share');
-  button.disabled=true;button.textContent='กำลังเปิดใช้ Location…';
-  hideModal('location-prompt-modal');
-  try{
-    // User gesture enables the first browser Location permission request.
-    const firstPosition=await getCurrentPosition();
-    setLocationConsent('granted');
-    if(orderId){
-      await startLocationSharing(orderId,true,true,firstPosition);
-    }else{
-      setStatus('เปิดใช้แชร์ตำแหน่งอัตโนมัติแล้ว · ระบบจะเริ่มส่ง GPS เมื่อมีออเดอร์');
-      alert('เปิดใช้แชร์ตำแหน่งอัตโนมัติแล้ว\nเมื่อมีออเดอร์ใหม่ ระบบจะเริ่มแชร์ตำแหน่งให้ร้านโดยอัตโนมัติ');
-    }
-  }catch(e){
-    // Remember the one-time in-app decision. Browser Location can be enabled later in device settings.
-    setLocationConsent('granted');
-    alert(e.message||'ยังเปิดใช้ Location ไม่สำเร็จ กรุณาตรวจสอบสิทธิ์ Location ของ LINE');
-  }finally{
-    button.disabled=false;button.textContent='อนุญาตและเปิดแชร์อัตโนมัติ';
-    pendingLocationPromptOrderId=null;
-  }
-});
-$('location-prompt-later').addEventListener('click',()=>{
-  setLocationConsent('declined');
-  pendingLocationPromptOrderId=null;hideModal('location-prompt-modal');
-});
 $('refresh-button').onclick=loadMenu;
 document.addEventListener('click',e=>{
   const close=e.target.closest('[data-close]');if(close){hideModal(close.dataset.close);return;}
@@ -433,6 +375,7 @@ document.addEventListener('click',e=>{
 document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)hideModal(m.id);}));
 start();
 setInterval(()=>{if(!document.hidden&&!$('tracking-section').hidden)loadMyOrders(false);},15000);
+
 </script>
 </body>
 </html>
