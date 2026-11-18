@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#5b3a27"><title>Café Amazon | สั่งเครื่องดื่ม</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
 <script src="./assets/config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -42,11 +43,6 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 </header>
 <main>
   <p class="status" id="status">กำลังเชื่อมต่อระบบ…</p>
-  <div id="line-login-prompt" hidden style="background:#fff;border:1px solid #e9e3d9;border-radius:14px;padding:18px;margin:12px 0;text-align:center">
-    <div style="font-weight:600;margin-bottom:6px">เข้าสู่ระบบด้วยบัญชี LINE</div>
-    <div class="hint" style="margin-bottom:12px">แตะปุ่มเพื่อให้ LINE ตรวจสอบบัญชีที่ลงชื่อเข้าใช้ในแอป หากอุปกรณ์รองรับ ระบบจะเข้าสู่ระบบอัตโนมัติโดยไม่ต้องกรอกรหัสผ่าน</div>
-    <a id="line-login-link" class="primary" href="#" style="display:inline-block;text-decoration:none;padding:11px 24px">เข้าสู่ระบบด้วย LINE</a>
-  </div>
   <div class="receipt" id="receipt"></div>
   <div class="section-title">เลือกหมวดหมู่</div><div class="chips" id="categories"><button class="chip active" data-cat="all">ทั้งหมด</button></div>
   <div class="section-title">เมนู Café Amazon</div><div class="grid" id="products"><div class="empty">กำลังโหลดเมนู…</div></div>
@@ -60,10 +56,9 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 
 <script>
 'use strict';
-const LINE_LOGIN_CHANNEL_ID='2012679988';
+const LINE_LIFF_ID='2012679988-ORHhLD7I';
 const LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login';
-const LINE_REDIRECT_URI=window.location.origin+window.location.pathname;
-const LINE_SESSION_KEY='ca_line_web_session_v1';
+const LINE_SESSION_KEY='ca_line_liff_session_v1';
 const BRANCH_CODE='PKT001';
 const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
 const TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders';
@@ -76,34 +71,37 @@ let activeRequestId=null;
 let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
 let lastCustomerOrders=[];
 
-function base64Url(bytes){let binary='';bytes.forEach(b=>binary+=String.fromCharCode(b));return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
-function randomToken(size=32){const bytes=new Uint8Array(size);crypto.getRandomValues(bytes);return base64Url(bytes);}
-async function sha256Base64Url(value){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return base64Url(new Uint8Array(digest));}
 function getLineSession(){try{const s=JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null');if(!s?.idToken||Number(s.expiresAt)<=Date.now()+60000)return null;profile=s.profile||null;return s;}catch(_){return null;}}
 function getLineIdToken(){return getLineSession()?.idToken||null;}
-async function beginLineLogin(){
- const state=randomToken(),nonce=randomToken(),verifier=randomToken(48),challenge=await sha256Base64Url(verifier);
- sessionStorage.setItem('ca_line_oauth_pending',JSON.stringify({state,nonce,verifier,createdAt:Date.now()}));
- const p=new URLSearchParams({response_type:'code',client_id:LINE_LOGIN_CHANNEL_ID,redirect_uri:LINE_REDIRECT_URI,state,scope:'openid profile',nonce,code_challenge:challenge,code_challenge_method:'S256'});
- // Use a real user-tapped anchor. LINE documents that JavaScript redirects can prevent iOS Universal Links from opening LINE for auto-login.
- $('line-login-link').href='https://access.line.me/oauth2/v2.1/authorize?'+p.toString();
- $('line-login-prompt').hidden=false;
- setStatus('แตะปุ่มเข้าสู่ระบบด้วย LINE เพื่อยืนยันบัญชี');
-}
+let liffInitPromise=null;
 async function establishLineSession(){
- const p=new URLSearchParams(location.search),code=p.get('code'),state=p.get('state');
- if(p.get('error'))throw new Error('LINE Login ถูกยกเลิกหรือไม่สำเร็จ');
- if(code){
-  let pending=null;try{pending=JSON.parse(sessionStorage.getItem('ca_line_oauth_pending')||'null');}catch(_){}
-  if(!pending||!state||state!==pending.state||Date.now()-pending.createdAt>600000)throw new Error('การยืนยัน LINE Login ไม่ถูกต้องหรือหมดเวลา');
-  const res=await fetch(LINE_LOGIN_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({code,code_verifier:pending.verifier,nonce:pending.nonce,redirect_uri:LINE_REDIRECT_URI})});
+  if(!window.liff)throw new Error('โหลด LINE LIFF SDK ไม่สำเร็จ กรุณาปิดหน้าแล้วเปิดจาก Rich Menu อีกครั้ง');
+  if(!liffInitPromise){
+    liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
+  }
+  await liffInitPromise;
+  if(!liff.isLoggedIn()){
+    if(!liff.isInClient()){
+      liff.login({redirectUri:location.href});
+      return null;
+    }
+    throw new Error('ไม่สามารถยืนยันบัญชี LINE ในแอปได้ กรุณาปิดแล้วเปิดจาก Rich Menu อีกครั้ง');
+  }
+  const idToken=liff.getIDToken();
+  if(!idToken)throw new Error('ไม่ได้รับ LINE ID Token กรุณาตรวจสอบ LIFF Scope: openid และ profile');
+  const cached=getLineSession();
+  if(cached&&cached.idToken===idToken)return cached;
+  const res=await fetch(LINE_LOGIN_FUNCTION_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
+    body:JSON.stringify({id_token:idToken})
+  });
   const data=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
-  if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ไม่สามารถยืนยัน LINE Login ได้');
-  const tokenExpiry=Number(data.id_token_expires_at)||Date.now()+3600000;
-  const s={idToken:data.id_token,expiresAt:Math.min(tokenExpiry-60000,Date.now()+Math.max(60,Number(data.expires_in||3600)-60)*1000),profile:data.profile||null};
-  sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(s));sessionStorage.removeItem('ca_line_oauth_pending');history.replaceState({},document.title,LINE_REDIRECT_URI);profile=s.profile;return s;
- }
- const s=getLineSession();if(s)return s;await beginLineLogin();return null;
+  if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ไม่สามารถยืนยันบัญชี LINE ได้');
+  const session={idToken:data.id_token,expiresAt:Number(data.id_token_expires_at)||Date.now()+3600000,profile:data.profile||null};
+  sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
+  profile=session.profile;
+  return session;
 }
 
 const $=id=>document.getElementById(id);
