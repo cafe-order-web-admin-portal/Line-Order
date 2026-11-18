@@ -164,7 +164,24 @@ function selectOrder(id){selectedOrderId=id;renderOrders();const order=ordersCac
 async function startSession(session){$('login-panel').classList.add('hidden');$('app').classList.remove('hidden');$('refresh-btn').classList.remove('hidden');$('logout-btn').classList.remove('hidden');updateSoundButton();sessionStartMs=Date.now();alertedOrderIds.clear();hasInitialLoad=false;const staffRes=await db.from('staff').select('id,auth_user_id,branch_id,staff_name,is_active').eq('auth_user_id',session.user.id).eq('is_active',true).maybeSingle();if(staffRes.error)throw staffRes.error;if(!staffRes.data?.branch_id)throw new Error('บัญชีนี้ยังไม่ได้ลงทะเบียนเป็นพนักงาน Active ของสาขา');currentStaff=staffRes.data;const branchRes=await db.from('branches').select('id,branch_code,branch_name,latitude,longitude,is_active').eq('id',currentStaff.branch_id).maybeSingle();if(branchRes.error)throw branchRes.error;currentBranch=branchRes.data||null;$('branch-live').textContent=(currentBranch?.branch_name||'สาขาที่ลงทะเบียน')+' · กำลังเชื่อมต่อ';initMap();subscribeRealtime();await loadDashboard();setTimeout(()=>map?.invalidateSize(),250);}
 async function logout(){if(liveChannel){await db.removeChannel(liveChannel);liveChannel=null;}currentStaff=null;currentBranch=null;ordersCache=[];selectedOrderId=null;markersByOrder.clear();if(markerLayer)markerLayer.clearLayers();if(routeLayer)routeLayer.clearLayers();shopMarker=null;if(map)map._caFitDone=false;await db.auth.signOut();$('app').classList.add('hidden');$('login-panel').classList.remove('hidden');$('refresh-btn').classList.add('hidden');$('logout-btn').classList.add('hidden');setLive(false,'รอเข้าสู่ระบบ');}
 async function handleSession(session){if(!session){if(currentStaff)await logout();return;}const uid=session.user.id;if(currentStaff?.auth_user_id===uid||bootingUserId===uid)return;bootingUserId=uid;try{await startSession(session);}catch(e){console.error(e);$('login-error').textContent=e.message||'ไม่สามารถตรวจสอบบัญชีพนักงานได้';await db.auth.signOut();$('app').classList.add('hidden');$('login-panel').classList.remove('hidden');}finally{bootingUserId=null;}}
-async function login(){ $('login-error').textContent='';$('login-btn').disabled=true;const{data,error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error){$('login-error').textContent=error.message;$('login-btn').disabled=false;return;}await handleSession(data.session);$('login-btn').disabled=false;}
+async function login(){
+ const btn=$('login-btn'),errorBox=$('login-error');
+ errorBox.textContent='';
+ const email=$('email').value.trim(),password=$('password').value;
+ if(!email||!password){errorBox.textContent='กรุณากรอกอีเมลและรหัสผ่าน';return;}
+ btn.disabled=true;btn.textContent='กำลังเข้าสู่ระบบ…';
+ try{
+  const{data,error}=await db.auth.signInWithPassword({email,password});
+  if(error)throw error;
+  if(!data?.session)throw new Error('เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบบัญชีอีกครั้ง');
+  await handleSession(data.session);
+ }catch(e){
+  console.error('Staff login failed:',e);
+  errorBox.textContent=e?.message||'ไม่สามารถเชื่อมต่อระบบเข้าสู่ระบบได้ กรุณาลองใหม่';
+ }finally{
+  btn.disabled=false;btn.textContent='เข้าสู่ระบบ';
+ }
+}
 $('login-btn').addEventListener('click',login);$('password').addEventListener('keydown',e=>{if(e.key==='Enter')login();});$('logout-btn').addEventListener('click',logout);$('refresh-btn').addEventListener('click',loadDashboard);$('search').addEventListener('input',renderOrders);document.querySelector('.queue-tabs').addEventListener('click',e=>{const btn=e.target.closest('[data-filter]');if(!btn)return;activeFilter=btn.dataset.filter;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===btn));renderOrders();});
 $('orders-list').addEventListener('click',e=>{const toggle=e.target.closest('[data-toggle-items]');if(toggle){const card=toggle.closest('.live-order-card');const open=card.classList.toggle('details-open');const count=ordersCache.find(o=>o.id===toggle.dataset.toggleItems)?.items?.length||0;toggle.textContent=open?'ซ่อนรายละเอียด ▴':'ดูรายการ '+count+' เมนู ▾';return;}const advance=e.target.closest('[data-advance]');if(advance){changeStatus(advance.dataset.advance,advance.dataset.next,advance);return;}const cancel=e.target.closest('[data-cancel]');if(cancel&&confirm('ยืนยันยกเลิกคำสั่งซื้อนี้หรือไม่?')){changeStatus(cancel.dataset.cancel,'cancelled',cancel);return;}const row=e.target.closest('[data-select]');if(row)selectOrder(row.dataset.select);});
 db.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>handleSession(session),0);});db.auth.getSession().then(({data})=>handleSession(data.session));updateClock();setInterval(updateClock,1000);setInterval(()=>{if(currentStaff&&!document.hidden)loadDashboard();},5000);setInterval(()=>{if(currentStaff&&!document.hidden)renderMap();},5000);window.addEventListener('online',()=>{if(currentStaff)subscribeRealtime();});
