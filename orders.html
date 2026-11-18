@@ -51,6 +51,30 @@
 .live-order-card .live-order-actions{gap:5px;margin-top:5px}
 .live-order-card .live-order-actions button{padding:6px 9px;font-size:10px;min-height:30px}
 
+/* Compact uniform cards: fit panel, keep action buttons visible, show complete order number */
+@media(min-width:521px){
+ .queue-list{grid-auto-rows:360px!important;align-items:stretch}
+ .queue-list>.live-order-card{height:360px!important;min-height:360px!important;max-height:360px!important;box-sizing:border-box}
+}
+@media(max-width:520px){
+ .queue-list{grid-auto-rows:360px!important;align-items:stretch}
+ .queue-list>.live-order-card{height:360px!important;min-height:360px!important;max-height:360px!important;box-sizing:border-box}
+}
+.live-order-card{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.live-order-card .order-products-list{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+.live-order-card .order-customer-compact{flex:0 0 auto}
+.live-order-card .order-number-cell{min-width:0}
+.live-order-card .order-number-cell strong{
+ display:block!important;white-space:normal!important;overflow:visible!important;
+ text-overflow:clip!important;overflow-wrap:anywhere!important;word-break:break-word!important;
+ line-height:1.2;font-size:8px!important
+}
+.live-order-card .live-order-actions{
+ display:flex!important;flex:0 0 auto;align-items:stretch;margin-top:auto!important;
+ padding-top:5px;gap:5px;min-height:32px
+}
+.live-order-card .live-order-actions .live-order-next{flex:1 1 auto;min-width:0}
+.live-order-card .live-order-actions .live-order-cancel{flex:0 0 auto}
 /* Fixed-height order cards: same top and bottom baseline, action buttons never jump */
 @media(min-width:801px){
  .queue-list{grid-auto-rows:440px;align-items:stretch}
