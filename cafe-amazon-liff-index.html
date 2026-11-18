@@ -56,11 +56,11 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
   <div class="modal" id="location-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="location-prompt-title">
     <div class="sheet location-prompt-sheet">
       <div class="location-prompt-icon">📍</div>
-      <h2 id="location-prompt-title">แชร์ตำแหน่งของฉันให้ร้านไหม?</h2>
-      <p class="location-prompt-order" id="location-prompt-order"></p>
-      <p class="location-prompt-copy">Café Amazon จะเห็นตำแหน่งล่าสุดของคุณบนแผนที่สำหรับติดตามออเดอร์นี้ เฉพาะพนักงานของสาขาเท่านั้นที่เห็นตำแหน่ง</p>
-      <p class="location-prompt-note">ระบบจะอัปเดตตำแหน่งขณะที่เปิดหน้า LINE นี้และอนุญาต Location คุณหยุดแชร์ได้ทุกเมื่อ</p>
-      <button type="button" class="location-prompt-yes" id="location-prompt-share">📍 แชร์ตำแหน่งของฉัน</button>
+      <h2 id="location-prompt-title">อนุญาตแชร์ตำแหน่งอัตโนมัติไหม?</h2>
+      <p class="location-prompt-order" id="location-prompt-order">ตั้งค่าครั้งแรกเพียงครั้งเดียว</p>
+      <p class="location-prompt-copy">เมื่อคุณสั่งเครื่องดื่ม ระบบจะส่งตำแหน่ง GPS ให้ Café Amazon โดยอัตโนมัติ เพื่อให้พนักงานติดตามออเดอร์บนแผนที่ เฉพาะพนักงานของสาขาเท่านั้นที่เห็นตำแหน่ง</p>
+      <p class="location-prompt-note">การอัปเดตทำงานขณะเปิดหน้า LINE นี้และอนุญาต Location คุณหยุดแชร์ได้ทุกเมื่อจากรายการคำสั่งซื้อ</p>
+      <button type="button" class="location-prompt-yes" id="location-prompt-share">อนุญาตและเปิดแชร์อัตโนมัติ</button>
       <button type="button" class="location-prompt-later" id="location-prompt-later">ยังไม่แชร์ตอนนี้</button>
     </div>
   </div>
@@ -88,6 +88,13 @@ let optionGroups=[],optionChoices=[],productGroupLinks=[],productOptionLinks=[],
 let activeRequestId=null;
 let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
 let lastCustomerOrders=[], locationPromptShown=false, pendingLocationPromptOrderId=null;
+function locationConsentKey(){
+  let userId=profile?.userId||'line-user';
+  try{userId=profile?.userId||liff.getDecodedIDToken?.()?.sub||userId;}catch(e){}
+  return 'ca_location_auto_consent_'+String(userId);
+}
+function getLocationConsent(){try{return localStorage.getItem(locationConsentKey())||'';}catch(e){return '';}}
+function setLocationConsent(value){try{localStorage.setItem(locationConsentKey(),value);}catch(e){console.warn('Cannot save location consent:',e);}}
 const $=id=>document.getElementById(id);
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -213,6 +220,9 @@ async function submitOrder(){
     $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: <b>'+money(result.total_amount)+'</b><br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน')+'<div class="receipt-share"><div class="receipt-share-title">📍 ให้ร้านเห็นตำแหน่งของคุณบนแผนที่ไหม?</div><div class="receipt-share-note">กดปุ่มด้านล่างเพื่อแชร์ GPS ให้พนักงานติดตามตำแหน่งสำหรับออเดอร์นี้เท่านั้น ร้านจะเห็นพิกัดเฉพาะพนักงาน และคุณหยุดแชร์ได้ทุกเมื่อ</div><button type="button" class="receipt-share-btn" data-receipt-share="'+esc(result.order_id||'')+'" '+(result.order_id?'':'disabled')+'>📍 แชร์ตำแหน่งของฉันให้ร้าน</button><div class="receipt-share-hint">การแชร์เป็นทางเลือก · ระบบจะขออนุญาต Location จากอุปกรณ์ก่อนเริ่มส่งพิกัด และอัปเดตขณะเปิดหน้า LINE ไว้เท่านั้น</div></div>';
     $('receipt').classList.add('show');
     await loadMyOrders(false);
+    if(getLocationConsent()==='granted'){
+      await startLocationSharing(result.order_id,true,true);
+    }
     $('receipt').scrollIntoView({behavior:'smooth',block:'center'});
   }catch(e){console.error('Order submit:',e);$('order-error').textContent=e.message||'เกิดข้อผิดพลาด กรุณาลองอีกครั้ง';}
   finally{button.disabled=false;button.textContent='ยืนยันคำสั่งซื้อ';}
@@ -222,17 +232,33 @@ async function promptLocationSharingOnOpen(){
   locationPromptShown=true;
   try{
     await loadMyOrders(false);
-    const activeOrders=lastCustomerOrders.filter(order=>!['completed','cancelled'].includes(order.order_status));
-    if(!activeOrders.length)return;
-    // A single phone location watcher is associated with the latest active order.
-    const order=activeOrders.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
-    if(order.location_share?.is_sharing&&activeLocationOrderId===order.order_id)return;
-    pendingLocationPromptOrderId=order.order_id;
-    $('location-prompt-order').textContent='สำหรับออเดอร์ '+(order.order_number||'ล่าสุด');
+    const activeOrders=lastCustomerOrders
+      .filter(order=>!['completed','cancelled'].includes(order.order_status))
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    const latestOrder=activeOrders[0]||null;
+    const consent=getLocationConsent();
+
+    // Customers who had already shared GPS before this preference existed are treated as opted in.
+    if(!consent&&latestOrder?.location_share?.is_sharing)setLocationConsent('granted');
+    const savedConsent=getLocationConsent();
+
+    if(savedConsent==='granted'){
+      if(latestOrder){
+        pendingLocationPromptOrderId=latestOrder.order_id;
+        await startLocationSharing(latestOrder.order_id,true,true);
+      }
+      return;
+    }
+    if(savedConsent==='declined')return;
+
+    pendingLocationPromptOrderId=latestOrder?.order_id||null;
+    $('location-prompt-order').textContent=latestOrder
+      ? 'ออเดอร์ที่กำลังดำเนินการ: '+(latestOrder.order_number||'ออเดอร์ล่าสุด')
+      : 'ตั้งค่าสำหรับการสั่งซื้อครั้งต่อไป';
     $('location-prompt-share').disabled=false;
-    $('location-prompt-share').textContent='📍 แชร์ตำแหน่งของฉัน';
+    $('location-prompt-share').textContent='อนุญาตและเปิดแชร์อัตโนมัติ';
     showModal('location-prompt-modal');
-  }catch(e){console.warn('Location prompt on open:',e.message||e);}
+  }catch(e){console.warn('Location auto-share setup:',e.message||e);}
 }
 function renderCustomerTimeline(order){
   const history=Array.isArray(order.status_history)?order.status_history:[];
@@ -293,14 +319,15 @@ function distanceMeters(a,b){
   const x=Math.sin(dLat/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(dLon/2)**2;
   return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
-async function startLocationSharing(orderId,consentAlreadyGiven=false){
-  if(!consentAlreadyGiven&&!confirm('อนุญาตให้ Café Amazon ตลาดทวีสมานเห็นตำแหน่งของคุณสำหรับคำสั่งซื้อนี้หรือไม่?\nระบบจะอัปเดตขณะเปิดหน้า LIFF ไว้ และคุณหยุดแชร์ได้ทุกเมื่อ'))return;
+async function startLocationSharing(orderId,consentAlreadyGiven=false,silent=false,initialPosition=null){
+  if(!consentAlreadyGiven&&getLocationConsent()!=='granted'&&!confirm('อนุญาตให้ Café Amazon ตลาดทวีสมานเห็นตำแหน่งของคุณสำหรับคำสั่งซื้อนี้หรือไม่?\nระบบจะอัปเดตขณะเปิดหน้า LIFF ไว้ และคุณหยุดแชร์ได้ทุกเมื่อ'))return;
   try{
     if(!liff.isLoggedIn()){liff.login({redirectUri:window.location.href});return;}
-    const position=await getCurrentPosition();
+    const position=initialPosition||await getCurrentPosition();
     if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);
     if(activeLocationOrderId&&activeLocationOrderId!==orderId){await postLocation('stop',activeLocationOrderId).catch(()=>{});}
     const result=await postLocation('start',orderId,position);
+    setLocationConsent('granted');
     activeLocationOrderId=orderId;lastLocationSentAt=Date.now();lastSentLocation={latitude:position.coords.latitude,longitude:position.coords.longitude};
     locationWatchId=navigator.geolocation.watchPosition(async next=>{
       if(locationSending||activeLocationOrderId!==orderId)return;
@@ -315,12 +342,13 @@ async function startLocationSharing(orderId,consentAlreadyGiven=false){
     await loadMyOrders(false);
     const receiptShare=$('receipt').querySelector('[data-receipt-share="'+orderId+'"]');
     if(receiptShare){receiptShare.textContent='✓ กำลังแชร์ตำแหน่งให้ร้านแล้ว';receiptShare.disabled=true;}
-    alert('เริ่มแชร์ตำแหน่งให้ร้านแล้วครับ\nพิกัดล่าสุดถูกส่งเรียบร้อย');
-  }catch(e){alert(e.message||'ไม่สามารถเริ่มแชร์ตำแหน่งได้');}
+    if(!silent)alert('เริ่มแชร์ตำแหน่งให้ร้านแล้วครับ\nพิกัดล่าสุดถูกส่งเรียบร้อย');
+  }catch(e){console.warn('Location sharing failed:',e.message||e);if(!silent)alert(e.message||'ไม่สามารถเริ่มแชร์ตำแหน่งได้');}
 }
 async function stopLocationSharing(orderId){
   try{
     await postLocation('stop',orderId);
+    setLocationConsent('declined');
     if(activeLocationOrderId===orderId){if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;activeLocationOrderId=null;lastSentLocation=null;lastLocationSentAt=0;}
     const receiptShare=$('receipt').querySelector('[data-receipt-share="'+orderId+'"]');
     if(receiptShare){receiptShare.textContent='📍 แชร์ตำแหน่งของฉันให้ร้าน';receiptShare.disabled=false;}
@@ -368,8 +396,34 @@ $('track-button').onclick=()=>loadMyOrders(true);
 $('tracking-refresh').onclick=()=>loadMyOrders(false);
 $('tracking-list').addEventListener('click',e=>{const start=e.target.closest('[data-share-location]');if(start){startLocationSharing(start.dataset.shareLocation);return;}const stop=e.target.closest('[data-stop-location]');if(stop){stopLocationSharing(stop.dataset.stopLocation);}});
 $('receipt').addEventListener('click',e=>{const start=e.target.closest('[data-receipt-share]');if(start&&!start.disabled){startLocationSharing(start.dataset.receiptShare);}});
-$('location-prompt-share').addEventListener('click',async()=>{const orderId=pendingLocationPromptOrderId;if(!orderId)return;const button=$('location-prompt-share');button.disabled=true;button.textContent='กำลังขออนุญาต Location…';hideModal('location-prompt-modal');await startLocationSharing(orderId,true);button.disabled=false;button.textContent='📍 แชร์ตำแหน่งของฉัน';pendingLocationPromptOrderId=null;});
-$('location-prompt-later').addEventListener('click',()=>{pendingLocationPromptOrderId=null;hideModal('location-prompt-modal');});
+$('location-prompt-share').addEventListener('click',async()=>{
+  const orderId=pendingLocationPromptOrderId;
+  const button=$('location-prompt-share');
+  button.disabled=true;button.textContent='กำลังเปิดใช้ Location…';
+  hideModal('location-prompt-modal');
+  try{
+    // User gesture enables the first browser Location permission request.
+    const firstPosition=await getCurrentPosition();
+    setLocationConsent('granted');
+    if(orderId){
+      await startLocationSharing(orderId,true,true,firstPosition);
+    }else{
+      setStatus('เปิดใช้แชร์ตำแหน่งอัตโนมัติแล้ว · ระบบจะเริ่มส่ง GPS เมื่อมีออเดอร์');
+      alert('เปิดใช้แชร์ตำแหน่งอัตโนมัติแล้ว\nเมื่อมีออเดอร์ใหม่ ระบบจะเริ่มแชร์ตำแหน่งให้ร้านโดยอัตโนมัติ');
+    }
+  }catch(e){
+    // Remember the one-time in-app decision. Browser Location can be enabled later in device settings.
+    setLocationConsent('granted');
+    alert(e.message||'ยังเปิดใช้ Location ไม่สำเร็จ กรุณาตรวจสอบสิทธิ์ Location ของ LINE');
+  }finally{
+    button.disabled=false;button.textContent='อนุญาตและเปิดแชร์อัตโนมัติ';
+    pendingLocationPromptOrderId=null;
+  }
+});
+$('location-prompt-later').addEventListener('click',()=>{
+  setLocationConsent('declined');
+  pendingLocationPromptOrderId=null;hideModal('location-prompt-modal');
+});
 $('refresh-button').onclick=loadMenu;
 document.addEventListener('click',e=>{
   const close=e.target.closest('[data-close]');if(close){hideModal(close.dataset.close);return;}
