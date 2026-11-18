@@ -3313,3 +3313,19 @@ SELECT routine_name, security_type
 FROM information_schema.routines
 WHERE specific_schema = 'public'
   AND routine_name = 'update_order_status';
+
+-- =====================================================================
+-- SECTION 25. PKT001 STORE MAP COORDINATES + DASHBOARD SHOP MARKER
+-- Store coordinates supplied by the business owner.
+-- Safe to re-run. Does not modify orders, products, prices or staff data.
+-- =====================================================================
+
+UPDATE public.branches
+SET latitude = 7.9153428,
+    longitude = 98.3717597
+WHERE branch_code = 'PKT001';
+
+-- Verify the configured store coordinates.
+SELECT branch_code, branch_name, latitude, longitude
+FROM public.branches
+WHERE branch_code = 'PKT001';
