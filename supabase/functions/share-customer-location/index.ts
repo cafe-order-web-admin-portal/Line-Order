@@ -3,8 +3,9 @@
 // Supabase Dashboard setting: Verify JWT = OFF (LINE ID token is verified here).
 import { createClient } from "npm:@supabase/supabase-js@2.119.0";
 
-const ALLOWED_ORIGINS = new Set(["https://cafe-amazon-web-admin-portal.github.io"]);
+const ALLOWED_ORIGINS = new Set(["https://cafe-order-web-admin-portal.github.io", "https://cafe-amazon-web-admin-portal.github.io"]);
 const LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
+const EXPECTED_LINE_LOGIN_CHANNEL_ID = "2012679988";
 
 function cors(origin: string | null): HeadersInit {
   return {
@@ -34,10 +35,29 @@ async function verifyLineIdToken(idToken: string, channelId: string): Promise<st
   });
   const claims = await response.json().catch(() => ({}));
   const now = Math.floor(Date.now() / 1000);
-  if (
-    !response.ok || claims.aud !== channelId || claims.iss !== "https://access.line.me" ||
-    typeof claims.sub !== "string" || Number(claims.exp) <= now
-  ) throw new Error("LINE_ID_TOKEN_INVALID");
+  if (!response.ok) {
+    console.error("LINE Verify ID token rejected", {
+      http_status: response.status,
+      error: claims.error ?? null,
+      error_description: claims.error_description ?? null,
+    });
+    throw new Error("LINE_ID_TOKEN_INVALID");
+  }
+  const issues: string[] = [];
+  if (claims.aud !== channelId) issues.push("audience_mismatch");
+  if (claims.iss !== "https://access.line.me") issues.push("issuer_mismatch");
+  if (typeof claims.sub !== "string" || !claims.sub) issues.push("subject_missing");
+  if (Number(claims.exp) <= now) issues.push("token_expired");
+  if (issues.length) {
+    console.error("LINE ID token claim validation failed", {
+      issues,
+      expected_channel_id: channelId,
+      received_audience: claims.aud ?? null,
+      received_issuer: claims.iss ?? null,
+      token_exp: claims.exp ?? null,
+    });
+    throw new Error("LINE_ID_TOKEN_INVALID");
+  }
   return claims.sub;
 }
 
@@ -75,7 +95,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const lineUserId = await verifyLineIdToken(idToken, requiredEnv("LINE_LOGIN_CHANNEL_ID"));
+    const lineUserId = await verifyLineIdToken(idToken, EXPECTED_LINE_LOGIN_CHANNEL_ID);
     const admin = createClient(requiredEnv("SUPABASE_URL"), requiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
       auth: { autoRefreshToken: false, persistSession: false },
     });
@@ -97,7 +117,7 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("share-customer-location failed:", message);
-    if (message.includes("LINE_ID_TOKEN_INVALID")) return reply(origin, 401, { error: "LINE login หมดอายุ กรุณาเปิด LINE ใหม่" });
+    if (message.includes("LINE_ID_TOKEN_INVALID")) return reply(origin, 401, { error: "LINE login หมดอายุ กรุณาเข้าสู่ระบบ LINE ใหม่" });
     return reply(origin, 500, { error: "ไม่สามารถบันทึกตำแหน่งได้ในขณะนี้" });
   }
 });

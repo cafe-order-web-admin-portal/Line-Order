@@ -1,8 +1,8 @@
 // Admin status update endpoint.
 // Dashboard setting: Verify JWT = ON (default). Requires a signed-in Supabase staff user.
-import { createClient } from "npm:@supabase/supabase-js@2.119.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
-const ALLOWED_ORIGINS = new Set(["https://cafe-amazon-web-admin-portal.github.io"]);
+const ALLOWED_ORIGINS = new Set(["https://cafe-order-web-admin-portal.github.io", "https://cafe-amazon-web-admin-portal.github.io"]);
 const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
 
 function cors(origin: string | null): HeadersInit {

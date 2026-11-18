@@ -22,7 +22,7 @@
   };
   const state = {
     db:null, session:null, user:null, staff:null, branches:[], categories:[],
-    products:[], branchProducts:[], history:[], optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:'dashboard', selectedOptionProduct:'',
+    products:[], branchProducts:[], history:[], customers:[], optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:'dashboard', selectedOptionProduct:'', customerSearch:'',
     search:'', categoryFilter:'', importRows:[], importFileName:'', importErrors:[],
     busy:false
   };
@@ -86,7 +86,7 @@
   }
 
   async function reloadData() {
-    const [br,cat,prod,bp,hist,og,op,ogp,pol]=await Promise.all([
+    const [br,cat,prod,bp,hist,og,op,ogp,pol,cust]=await Promise.all([
       state.db.from('branches').select('id,branch_code,branch_name,is_active').eq('is_active',true).order('branch_code'),
       state.db.from('categories').select('id,category_name,sort_order,is_active').order('sort_order'),
       state.db.from('products').select('id,category_id,product_code,product_name,description,image_url,is_active,is_featured,display_order,created_at').order('display_order').order('product_name'),
@@ -97,15 +97,16 @@
       state.db.from('product_option_groups').select('id,group_code,group_name,selection_type,is_active,sort_order').order('sort_order'),
       state.db.from('product_options').select('id,group_id,option_code,option_name,price_delta,is_active,sort_order').order('sort_order'),
       state.db.from('product_option_group_products').select('product_id,group_id,is_required,min_select,max_select,sort_order'),
-      state.db.from('product_option_product_options').select('product_id,option_id,sort_order')
+      state.db.from('product_option_product_options').select('product_id,option_id,sort_order'),
+      state.db.from('customers').select('id,line_user_id,customer_name,phone,created_at').order('created_at',{ascending:false}).limit(500)
     ]);
-    for (const [label,r] of [['สาขา',br],['หมวดหมู่',cat],['สินค้า',prod],['ราคาสาขา',bp],['ประวัติ Import',hist],['กลุ่มตัวเลือก',og],['ตัวเลือก',op],['ความสัมพันธ์กลุ่ม',ogp],['ความสัมพันธ์ตัวเลือก',pol]]) {
+    for (const [label,r] of [['สาขา',br],['หมวดหมู่',cat],['สินค้า',prod],['ราคาสาขา',bp],['ประวัติ Import',hist],['กลุ่มตัวเลือก',og],['ตัวเลือก',op],['ความสัมพันธ์กลุ่ม',ogp],['ความสัมพันธ์ตัวเลือก',pol],['ลูกค้า',cust]]) {
       if(r.error) throw new Error(`โหลด${label}ไม่สำเร็จ: ${r.error.message}`);
     }
     state.branches=br.data||[]; state.categories=cat.data||[]; state.products=prod.data||[];
     state.branchProducts=bp.data||[]; state.history=hist.data||[];
     state.optionGroups=og.data||[]; state.options=op.data||[];
-    state.optionGroupProducts=ogp.data||[]; state.productOptionLinks=pol.data||[];
+    state.optionGroupProducts=ogp.data||[]; state.productOptionLinks=pol.data||[]; state.customers=cust.data||[];
     if(isSuper()) {
       if(!state.branchId || !state.branches.some(b=>b.id===state.branchId)) state.branchId=state.branches[0]?.id||'';
     } else {
@@ -131,6 +132,7 @@
             ${isSuper()?navButton('options','ตัวเลือกสินค้า','☷'):''}
             ${state.staff?.role !== 'staff' ? navButton('import','Import ข้อมูล','⇧') : ''}
             ${state.staff?.role !== 'staff' ? navButton('history','ประวัติ Import','◷') : ''}
+            ${state.staff?.role !== 'staff' ? navButton('customers','ข้อมูลลูกค้า','♙') : ''}
           </nav>
           <div class="side-foot">ระบบจัดการข้อมูลสินค้าและราคาสาขา<br>Version 1.0 · Supabase</div>
         </aside>
@@ -153,7 +155,7 @@
     $('#refresh-btn').onclick=async()=>{try{await reloadData();renderApp();toast('โหลดข้อมูลล่าสุดแล้ว')}catch(e){toast(e.message)}};
     bindPageEvents();
   }
-  function pageTitle(){return ({dashboard:'ภาพรวม',products:'จัดการสินค้า',categories:'จัดการหมวดหมู่',options:'ตัวเลือกสินค้า',import:'นำเข้าข้อมูล',history:'ประวัติการนำเข้า'})[state.page]||'Web Admin Portal';}
+  function pageTitle(){return ({dashboard:'ภาพรวม',products:'จัดการสินค้า',categories:'จัดการหมวดหมู่',options:'ตัวเลือกสินค้า',import:'นำเข้าข้อมูล',history:'ประวัติการนำเข้า',customers:'ข้อมูลลูกค้า LINE'})[state.page]||'Web Admin Portal';}
   function renderPage(){
     if(state.page==='dashboard') return viewDashboard();
     if(state.page==='products') return viewProducts();
@@ -161,6 +163,7 @@
     if(state.page==='options') return isSuper()?viewOptions():'<div class="alert">ไม่มีสิทธิ์จัดการตัวเลือกสินค้า</div>';
     if(state.page==='import') return (state.staff?.role!=='staff')?viewImport():'<div class="alert">ไม่มีสิทธิ์นำเข้าข้อมูล</div>'; 
     if(state.page==='history') return (state.staff?.role!=='staff')?viewHistory():'<div class="alert">ไม่มีสิทธิ์ดูประวัติ Import</div>';
+    if(state.page==='customers') return (state.staff?.role!=='staff')?viewCustomers():'<div class="alert">ไม่มีสิทธิ์ดูข้อมูลลูกค้า</div>';
     return '';
   }
 
@@ -335,7 +338,18 @@
       </tbody></table></div></div>`;
   }
 
+  function viewCustomers(){
+    const q=String(state.customerSearch||'').trim().toLowerCase();
+    const rows=state.customers.filter(c=>!q||[c.customer_name,c.line_user_id,c.phone].some(v=>String(v||'').toLowerCase().includes(q)));
+    return `<div class="page-head"><div><h2>ข้อมูลลูกค้า LINE</h2><p>LINE UID และข้อมูลลูกค้าที่มีประวัติสั่งซื้อกับสาขา</p></div><span class="pill">${rows.length} รายชื่อ</span></div>
+      <div class="panel"><div class="toolbar"><input id="customer-search" class="search" placeholder="ค้นหาชื่อ / LINE UID / เบอร์โทร…" value="${esc(state.customerSearch)}"><span class="muted small">แสดงสูงสุด 500 รายชื่อล่าสุด</span></div></div>
+      <div class="panel"><div class="table-wrap"><table><thead><tr><th>ลูกค้า</th><th>LINE User ID (UID)</th><th>เบอร์โทร</th><th>วันที่เพิ่ม</th></tr></thead><tbody>
+      ${rows.map(c=>`<tr><td><b>${esc(c.customer_name||'LINE Customer')}</b></td><td><code style="font-size:11px;word-break:break-all">${esc(c.line_user_id||'-')}</code></td><td>${esc(c.phone||'-')}</td><td>${c.created_at?new Date(c.created_at).toLocaleString('th-TH'):'-'}</td></tr>`).join('')||'<tr><td colspan="4"><div class="empty-state">ยังไม่มีข้อมูลลูกค้า หรือยังไม่มี Order ในสาขานี้</div></td></tr>'}
+      </tbody></table></div></div>`;
+  }
+
   function bindPageEvents(){
+    if($('#customer-search')) $('#customer-search').oninput=e=>{state.customerSearch=e.target.value;const pos=e.target.selectionStart;renderApp();const n=$('#customer-search');n.focus();n.setSelectionRange(pos,pos);};
     document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{state.page=b.dataset.goto;renderApp();});
     if($('#product-search')) $('#product-search').oninput=e=>{state.search=e.target.value;const pos=e.target.selectionStart;renderApp();const n=$('#product-search');n.focus();n.setSelectionRange(pos,pos);};
     if($('#category-filter')) $('#category-filter').onchange=e=>{state.categoryFilter=e.target.value;renderApp();};
