@@ -188,9 +188,9 @@ async function submitOrder(){
     const result=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
     if(!res.ok||result.success!==true)throw new Error(result.error||'ไม่สามารถสร้างคำสั่งซื้อได้');
     cart.clear();activeRequestId=null;updateCart();hideModal('cart-modal');
-    $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: <b>'+money(result.total_amount)+'</b><br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน')+'<br><small>สามารถติดตามสถานะได้จากปุ่ม “ติดตามคำสั่งซื้อ” ด้านบน</small>';
+    $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: <b>'+money(result.total_amount)+'</b><br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน')+'<br><small>ระบบจะแสดงรายการติดตามด้านล่าง · หากต้องการให้ร้านเห็นตำแหน่ง ให้กด “แชร์ตำแหน่งของฉัน” ในการ์ดคำสั่งซื้อ (สมัครใจ)</small>';
     $('receipt').classList.add('show');
-    await loadMyOrders(false);
+    await loadMyOrders(true);
   }catch(e){console.error('Order submit:',e);$('order-error').textContent=e.message||'เกิดข้อผิดพลาด กรุณาลองอีกครั้ง';}
   finally{button.disabled=false;button.textContent='ยืนยันคำสั่งซื้อ';}
 }
