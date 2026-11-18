@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#5b3a27"><title>Café Amazon | สั่งเครื่องดื่ม</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--coffee:#593b2b;--green:#176b45;--cream:#f7f4ed;--ink:#29251f;--muted:#827b70;--line:#e9e3d9}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:'IBM Plex Sans Thai',sans-serif;padding-bottom:94px}
+header{background:linear-gradient(120deg,#4b3024,#75513a);color:white;padding:22px 18px 24px;border-radius:0 0 22px 22px}
+.top{display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;border-radius:50%;background:#fff;color:var(--green);display:grid;place-items:center;font:700 24px Prompt}.brand{font:600 18px Prompt}.sub{font-size:12px;opacity:.82}
+.branch{margin-top:18px;font-size:13px;opacity:.95}.hero{font:600 22px Prompt;margin:8px 0 0}
+main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(--muted);margin:0 0 14px}
+.section-title{font:600 17px Prompt;margin:16px 0 10px}.chips{display:flex;gap:8px;overflow:auto;padding:2px 0 8px}.chip{white-space:nowrap;border:1px solid var(--line);border-radius:22px;background:white;padding:8px 14px;font:500 13px inherit;color:var(--ink)}.chip.active{background:var(--green);color:#fff;border-color:var(--green)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{background:white;border:1px solid var(--line);border-radius:15px;overflow:hidden}.photo{height:118px;background:#eee8dd;display:grid;place-items:center;color:#9b8e7d;font-size:34px}.photo img{width:100%;height:100%;object-fit:cover}.info{padding:11px}.name{font-weight:600;font-size:14px;min-height:42px}.desc{font-size:11px;color:var(--muted);min-height:18px}.row{display:flex;align-items:center;justify-content:space-between;margin-top:9px}.price{font-weight:700;color:var(--green)}button{font-family:inherit;cursor:pointer}.add{border:0;background:var(--green);color:white;border-radius:20px;padding:7px 13px;font-weight:600}.empty{grid-column:1/-1;text-align:center;padding:30px 12px;color:var(--muted);background:white;border-radius:14px}
+.cartbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:12px max(16px,env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom));display:flex;gap:12px;align-items:center;justify-content:space-between;box-shadow:0 -4px 20px #0000000b}.cartmeta{font-size:12px;color:var(--muted)}.carttotal{font-weight:700;font-size:17px}.checkout{background:var(--green);color:white;border:0;border-radius:12px;padding:12px 22px;font-weight:600}.checkout:disabled{opacity:.45}
+.modal{display:none;position:fixed;inset:0;background:#0008;z-index:5;align-items:flex-end}.modal.show{display:flex}.sheet{background:white;border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:85vh;overflow:auto}.sheet h2{font:600 18px Prompt;margin:0 0 14px}.cartline{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:10px 0;font-size:14px}.field{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font:inherit;margin:6px 0 12px}.hint{font-size:12px;color:var(--muted);line-height:1.5}.close{float:right;border:0;background:#f2eee8;border-radius:50%;width:32px;height:32px}
+@media(min-width:600px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.photo{height:145px}}
+</style></head>
+<body>
+<header><div class="top"><div class="logo">A</div><div><div class="brand">Café Amazon</div><div class="sub">Order Online · สั่งง่าย รับสะดวก</div></div></div><div class="branch">สาขา ตลาดทวีสมาน · ภูเก็ต</div><div class="hero">เติมความสดชื่นในแบบคุณ ☕</div></header>
+<main><p class="status" id="status">กำลังเชื่อมต่อระบบ…</p><div class="section-title">เลือกหมวดหมู่</div><div class="chips" id="categories"><button class="chip active" data-cat="all">ทั้งหมด</button></div><div class="section-title">เมนูแนะนำ</div><div class="grid" id="products"><div class="empty">กำลังโหลดเมนู…</div></div></main>
+<div class="cartbar"><div><div class="cartmeta" id="cart-count">0 รายการ</div><div class="carttotal" id="cart-total">฿0.00</div></div><button class="checkout" id="checkout" disabled>ดูตะกร้า</button></div>
+<div class="modal" id="modal"><div class="sheet"><button class="close" id="close">×</button><h2>ตะกร้าของคุณ</h2><div id="cart-lines"></div><div class="row"><b>ยอดรวม</b><b id="modal-total">฿0.00</b></div><label class="hint" for="customer-name">ชื่อผู้สั่ง</label><input class="field" id="customer-name" placeholder="ระบุชื่อสำหรับรับสินค้า"><label class="hint" for="customer-phone">เบอร์โทรศัพท์ (ไม่บังคับ)</label><input class="field" id="customer-phone" inputmode="tel" placeholder="เบอร์โทรศัพท์"><p class="hint">หน้าทดลองนี้ยังไม่ส่งคำสั่งซื้อจริง ต้องเชื่อมขั้นตอนบันทึกออเดอร์และตรวจสอบสต็อกก่อนเปิดใช้งาน</p><button class="checkout" style="width:100%" id="confirm" disabled>ยืนยันคำสั่งซื้อ (ยังไม่เปิดใช้งาน)</button></div></div>
+<script>
+const LIFF_ID='2012679988-ORHhLD7I';
+const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{};
+const db=cfg.url&&cfg.publishableKey?supabase.createClient(cfg.url,cfg.publishableKey):null;
+let allProducts=[],activeCategory='all',cart=new Map(),profile=null;
+const $=id=>document.getElementById(id), money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+function setStatus(s){$('status').textContent=s}
+async function start(){
+ try{await liff.init({liffId:LIFF_ID});if(liff.isLoggedIn()){profile=await liff.getProfile().catch(()=>null)}}
+ catch(e){console.warn('LIFF init:',e);setStatus('เปิดผ่าน LINE เพื่อเข้าสู่ระบบลูกค้าได้')}
+ if(!db){setStatus('ยังไม่ได้ตั้งค่าฐานข้อมูล');return}
+ await loadMenu();
+}
+async function loadMenu(){
+ const catRes=await db.from('categories').select('*').order('id');
+ if(catRes.error){setStatus('อ่านหมวดหมู่ไม่ได้: '+catRes.error.message);$('products').innerHTML='<div class="empty">รอตรวจสอบตาราง categories ในฐานข้อมูล</div>';return}
+ const cats=catRes.data||[];
+ $('categories').innerHTML='<button class="chip active" data-cat="all">ทั้งหมด</button>'+cats.map(c=>'<button class="chip" data-cat="'+c.id+'">'+(c.name||c.category_name||'หมวดหมู่')+'</button>').join('');
+ const prodRes=await db.from('products').select('*').order('name');
+ if(prodRes.error){setStatus('อ่านสินค้าไม่ได้: '+prodRes.error.message);$('products').innerHTML='<div class="empty">รอตรวจสอบตาราง products</div>';return}
+ allProducts=(prodRes.data||[]).map(p=>({...p,_name:p.name||p.product_name||'สินค้า',_price:Number(p.price??p.sale_price??0),_desc:p.description||'',_image:p.image_url||p.image||''}));
+ setStatus('โหลดเมนูแล้ว · '+allProducts.length+' รายการ');renderProducts();
+}
+function renderProducts(){
+ const list=activeCategory==='all'?allProducts:allProducts.filter(p=>String(p.category_id)===String(activeCategory));
+ $('products').innerHTML=list.length?list.map(p=>'<article class="card"><div class="photo">'+(p._image?'<img src="'+p._image+'" alt="">':'☕')+'</div><div class="info"><div class="name">'+p._name+'</div><div class="desc">'+p._desc+'</div><div class="row"><span class="price">'+money(p._price)+'</span><button class="add" data-add="'+p.id+'">+ เพิ่ม</button></div></div></article>').join(''):'<div class="empty">ยังไม่มีสินค้าในหมวดนี้</div>';
+}
+$('categories').addEventListener('click',e=>{const b=e.target.closest('[data-cat]');if(!b)return;activeCategory=b.dataset.cat;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderProducts()});
+$('products').addEventListener('click',e=>{const b=e.target.closest('[data-add]');if(!b)return;const p=allProducts.find(x=>String(x.id)===b.dataset.add);if(!p)return;cart.set(p.id,{product:p,qty:(cart.get(p.id)?.qty||0)+1});updateCart()});
+function updateCart(){let qty=0,total=0;cart.forEach(x=>{qty+=x.qty;total+=x.qty*x.product._price});$('cart-count').textContent=qty+' รายการ';$('cart-total').textContent=money(total);$('checkout').disabled=!qty}
+function openCart(){$('cart-lines').innerHTML=[...cart.values()].map(x=>'<div class="cartline"><span>'+x.product._name+' × '+x.qty+'</span><b>'+money(x.product._price*x.qty)+'</b></div>').join('');$('modal-total').textContent=$('cart-total').textContent;$('modal').classList.add('show')}
+$('checkout').onclick=openCart;$('close').onclick=()=>$('modal').classList.remove('show');$('modal').addEventListener('click',e=>{if(e.target===$('modal'))$('modal').classList.remove('show')});
+start();
+</script></body></html>
