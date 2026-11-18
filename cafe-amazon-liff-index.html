@@ -42,6 +42,11 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 </header>
 <main>
   <p class="status" id="status">กำลังเชื่อมต่อระบบ…</p>
+  <div id="line-login-prompt" hidden style="background:#fff;border:1px solid #e9e3d9;border-radius:14px;padding:18px;margin:12px 0;text-align:center">
+    <div style="font-weight:600;margin-bottom:6px">เข้าสู่ระบบด้วยบัญชี LINE</div>
+    <div class="hint" style="margin-bottom:12px">แตะปุ่มเพื่อให้ LINE ตรวจสอบบัญชีที่ลงชื่อเข้าใช้ในแอป หากอุปกรณ์รองรับ ระบบจะเข้าสู่ระบบอัตโนมัติโดยไม่ต้องกรอกรหัสผ่าน</div>
+    <a id="line-login-link" class="primary" href="#" style="display:inline-block;text-decoration:none;padding:11px 24px">เข้าสู่ระบบด้วย LINE</a>
+  </div>
   <div class="receipt" id="receipt"></div>
   <div class="section-title">เลือกหมวดหมู่</div><div class="chips" id="categories"><button class="chip active" data-cat="all">ทั้งหมด</button></div>
   <div class="section-title">เมนู Café Amazon</div><div class="grid" id="products"><div class="empty">กำลังโหลดเมนู…</div></div>
@@ -80,7 +85,10 @@ async function beginLineLogin(){
  const state=randomToken(),nonce=randomToken(),verifier=randomToken(48),challenge=await sha256Base64Url(verifier);
  sessionStorage.setItem('ca_line_oauth_pending',JSON.stringify({state,nonce,verifier,createdAt:Date.now()}));
  const p=new URLSearchParams({response_type:'code',client_id:LINE_LOGIN_CHANNEL_ID,redirect_uri:LINE_REDIRECT_URI,state,scope:'openid profile',nonce,code_challenge:challenge,code_challenge_method:'S256'});
- location.assign('https://access.line.me/oauth2/v2.1/authorize?'+p.toString());
+ // Use a real user-tapped anchor. LINE documents that JavaScript redirects can prevent iOS Universal Links from opening LINE for auto-login.
+ $('line-login-link').href='https://access.line.me/oauth2/v2.1/authorize?'+p.toString();
+ $('line-login-prompt').hidden=false;
+ setStatus('แตะปุ่มเข้าสู่ระบบด้วย LINE เพื่อยืนยันบัญชี');
 }
 async function establishLineSession(){
  const p=new URLSearchParams(location.search),code=p.get('code'),state=p.get('state');
