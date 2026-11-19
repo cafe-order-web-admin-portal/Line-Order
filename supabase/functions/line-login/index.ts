@@ -52,7 +52,7 @@ Deno.serve(async (req: Request) => {
     if (!idToken || idToken.length > 12000 || idToken.split(".").length !== 3) {
       return reply(origin, 400, { error: "invalid_liff_id_token" });
     }
-    if (!/^\\d+-[A-Za-z0-9]+$/.test(liffId)) {
+    if (!/^\d+-[A-Za-z0-9]+$/.test(liffId)) {
       return reply(origin, 400, { error: "invalid_liff_app_id" });
     }
 
