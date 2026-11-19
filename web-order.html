@@ -127,12 +127,12 @@ async function start(){
  if(!db){setStatus('ไม่พบการตั้งค่า Supabase — ตรวจสอบ assets/config.js');$('products').innerHTML='<div class="empty">ยังเชื่อมต่อฐานข้อมูลไม่ได้</div>';return;}
  try{
   if(!window.liff)throw new Error('โหลด LINE LIFF SDK ไม่สำเร็จ');
-  if(!liffInitPromise)liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID});
+  if(!liffInitPromise)liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
   await liffInitPromise;
   if(!liff.isLoggedIn()&&!liff.isInClient()){
     setStatus('กรุณาเข้าสู่ระบบด้วย LINE');
     $('products').innerHTML='<div class="empty"><div style="font-size:18px;font-weight:700;margin-bottom:10px">ยืนยันตัวตนผ่านแอป LINE</div><p style="color:#756f66;margin-bottom:18px">กดปุ่มด้านล่างเพื่อดำเนินการเข้าสู่ระบบ LINE แล้วกลับมาหน้าเว็บไซต์นี้</p><button class="primary" id="line-login-button" style="width:100%">เข้าสู่ระบบด้วย LINE</button></div>';
-    $('line-login-button').onclick=()=>{try{liff.login({redirectUri:location.href});}catch(e){setStatus('เปิด LINE Login ไม่สำเร็จ กรุณาลองอีกครั้ง');}};
+    $('line-login-button').onclick=()=>{try{liff.login();}catch(e){setStatus('เปิด LINE Login ไม่สำเร็จ กรุณาลองอีกครั้ง');}};
     return;
   }
   const session=await establishLineSession();if(!session)return;
