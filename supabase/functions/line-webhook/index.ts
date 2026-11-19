@@ -136,6 +136,15 @@ Deno.serve(async (req: Request) => {
       ? event.webhookEventId
       : "event-" + crypto.randomUUID();
 
+    if (event.type === "unsend" && lineUserId && typeof event.unsend?.messageId === "string" && admin) {
+      // Respect LINE unsend events: remove the previously stored message content.
+      const { error: unsendError } = await admin.from("line_chat_messages")
+        .delete()
+        .eq("line_user_id", lineUserId)
+        .eq("line_message_id", event.unsend.messageId);
+      if (unsendError) console.error("LINE unsend cleanup failed:", unsendError.code, unsendError.message);
+    }
+
     if (lineUserId) {
       const incomingType = event.type === "message"
         ? String(event.message?.type ?? "unknown")
