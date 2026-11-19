@@ -1,7 +1,6 @@
 // LINE Messaging API webhook for Café Amazon ตลาดทวีสมาน.
 // Dashboard setting: Verify JWT = OFF (LINE calls this endpoint without Supabase JWT).
 import { createClient } from "npm:@supabase/supabase-js@2.119.0";
-const LIFF_ORDER_URL = "https://liff.line.me/2012679988-ORHhLD7I";
 const LINE_REPLY_API = "https://api.line.me/v2/bot/message/reply";
 
 function toBase64(bytes: Uint8Array): string {
@@ -21,19 +20,6 @@ async function verifySignature(rawBody: string, signature: string, secret: strin
   return constantTimeEqual(toBase64(digest), signature);
 }
 type ChatAdmin = ReturnType<typeof createClient>;
-
-async function resolveBranchId(admin: ChatAdmin): Promise<string | null> {
-  const configuredCode = Deno.env.get("LINE_BRANCH_CODE")?.trim().toUpperCase();
-  let query = admin.from("branches").select("id,branch_code").eq("is_active", true);
-  if (configuredCode) query = query.eq("branch_code", configuredCode);
-  const { data, error } = await query.limit(configuredCode ? 1 : 2);
-  if (error) {
-    console.error("LINE chat branch mapping failed:", error.message);
-    return null;
-  }
-  // With multiple active branches, require an explicit LINE_BRANCH_CODE secret.
-  return data?.length === 1 ? data[0].id : null;
-}
 
 async function recordChat(
   admin: ChatAdmin | null,
@@ -101,27 +87,51 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") return new Response("Café Amazon LINE Webhook is running", { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  const channelSecret = Deno.env.get("LINE_CHANNEL_SECRET");
-  const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN");
-  if (!channelSecret || !accessToken) return new Response("Webhook configuration incomplete", { status: 500 });
-
-  let admin: ChatAdmin | null = null;
-  let branchId: string | null = null;
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (supabaseUrl && serviceRoleKey) {
-    admin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-    branchId = await resolveBranchId(admin);
-  } else {
-    // Keep replying to LINE even if optional chat logging secrets are missing.
-    console.error("LINE chat history storage is not configured: missing Supabase server secrets.");
+  if (!supabaseUrl || !serviceRoleKey) return new Response("Webhook registry is not configured", { status: 500 });
+
+  const admin: ChatAdmin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data: configs, error: configError } = await admin.rpc("get_line_messaging_configs");
+  if (configError || !Array.isArray(configs) || configs.length === 0) {
+    console.error("LINE Messaging channel registry lookup failed:", configError?.message ?? "no active configuration");
+    return new Response("No active LINE channel configuration", { status: 500 });
   }
 
   const rawBody = await req.text();
   const signature = req.headers.get("x-line-signature") ?? "";
-  if (!signature || !(await verifySignature(rawBody, signature, channelSecret))) return new Response("Invalid LINE signature", { status: 401 });
+  if (!signature) return new Response("Invalid LINE signature", { status: 401 });
+
+  // One endpoint supports several LINE Official Accounts. Identify the sender
+  // by validating the request signature against each channel's Vault secret.
+  let matchedConfig: Record<string, unknown> | null = null;
+  for (const config of configs as Array<Record<string, unknown>>) {
+    let candidateSecret = String(config.webhook_secret ?? "").trim();
+    if (!candidateSecret && config.use_legacy_env_credentials === true) {
+      candidateSecret = Deno.env.get("LINE_CHANNEL_SECRET")?.trim() ?? "";
+    }
+    if (!candidateSecret) continue;
+    if (await verifySignature(rawBody, signature, candidateSecret)) {
+      matchedConfig = config;
+      break;
+    }
+  }
+  if (!matchedConfig) return new Response("Invalid LINE signature or unregistered channel", { status: 401 });
+
+  const branchId = String(matchedConfig.branch_id ?? "");
+  const branchName = String(matchedConfig.branch_name ?? "Café Amazon");
+  const liffId = String(matchedConfig.liff_id ?? "");
+  const liffOrderUrl = liffId ? "https://liff.line.me/" + liffId : "";
+  const accessToken = String(matchedConfig.channel_access_token ?? "").trim()
+    || (matchedConfig.use_legacy_env_credentials === true
+      ? (Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN")?.trim() ?? "")
+      : "");
+  if (!branchId || !accessToken || !liffOrderUrl) {
+    console.error("LINE channel matched but branch, LIFF or Messaging API token is missing:", matchedConfig.line_login_channel_id);
+    return new Response("LINE channel setup is incomplete", { status: 500 });
+  }
 
   let payload: { events?: Array<Record<string, any>> };
   try { payload = JSON.parse(rawBody); } catch { return new Response("Invalid JSON", { status: 400 }); }
@@ -167,7 +177,7 @@ Deno.serve(async (req: Request) => {
     if (event.type === "follow") {
       await replyText(
         token,
-        `ยินดีต้อนรับสู่ Café Amazon ตลาดทวีสมาน ☕\nกดลิงก์เพื่อเลือกเมนูและสั่งซื้อได้ที่นี่\n${LIFF_ORDER_URL}`,
+        `ยินดีต้อนรับสู่ ${branchName} ☕\nกดลิงก์เพื่อเลือกเมนูและสั่งซื้อได้ที่นี่\n${liffOrderUrl}`,
         accessToken, admin, branchId, lineUserId, eventKey, event.timestamp,
       );
       continue;
@@ -177,13 +187,13 @@ Deno.serve(async (req: Request) => {
       if (["เมนู", "สั่งซื้อ", "order", "menu", "ซื้อ"].some((word) => text.includes(word))) {
         await replyText(
           token,
-          `เมนู Café Amazon ตลาดทวีสมาน ☕\nเปิดหน้าสั่งซื้อได้ที่นี่\n${LIFF_ORDER_URL}`,
+          `เมนู ${branchName} ☕\nเปิดหน้าสั่งซื้อได้ที่นี่\n${liffOrderUrl}`,
           accessToken, admin, branchId, lineUserId, eventKey, event.timestamp,
         );
       } else {
         await replyText(
           token,
-          `ขอบคุณที่ติดต่อ Café Amazon ตลาดทวีสมานครับ ☕\nพิมพ์ “เมนู” หรือ “สั่งซื้อ” เพื่อเปิดหน้าสั่งซื้อ\n${LIFF_ORDER_URL}`,
+          `ขอบคุณที่ติดต่อ ${branchName} ครับ ☕\nพิมพ์ “เมนู” หรือ “สั่งซื้อ” เพื่อเปิดหน้าสั่งซื้อ\n${liffOrderUrl}`,
           accessToken, admin, branchId, lineUserId, eventKey, event.timestamp,
         );
       }
