@@ -5,7 +5,6 @@ const ALLOWED_ORIGINS = new Set([
   "https://cafe-amazon-web-admin-portal.github.io",
 ]);
 const LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
-const EXPECTED_LINE_LOGIN_CHANNEL_ID = "2012679988";
 const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
 const TRACKING_URL = "https://cafe-order-web-admin-portal.github.io/Line-Order/track-order.html";
 function statusFlex(status: string, orderNumber: string, amount?: string) {
@@ -166,16 +165,16 @@ Deno.serve(async (req: Request) => {
   }
 
   const idToken = typeof body.id_token === "string" ? body.id_token.trim() : "";
+  const liffId = typeof body.liff_id === "string" ? body.liff_id.trim() : "";
   const requestId = typeof body.request_id === "string" ? body.request_id.trim() : "";
   const customerNameInput = typeof body.customer_name === "string" ? body.customer_name.trim() : "";
   const phone = typeof body.phone === "string" ? body.phone.trim() : "";
   const customerNote = typeof body.customer_note === "string" ? body.customer_note.trim() : "";
-  const branchCodeInput = typeof body.branch_code === "string" ? body.branch_code.trim().toUpperCase() : "";
   const rawItems = body.items;
 
   if (!idToken || idToken.length > 12_000) return response(origin, 400, { error: "line_id_token_required" });
+  if (!/^\\d+-[A-Za-z0-9]+$/.test(liffId)) return response(origin, 400, { error: "registered_liff_id_required" });
   if (!UUID_RE.test(requestId)) return response(origin, 400, { error: "request_id_must_be_uuid" });
-  if (branchCodeInput && !/^[A-Z0-9][A-Z0-9_-]{0,31}$/.test(branchCodeInput)) return response(origin, 400, { error: "invalid_branch_code" });
   if (customerNameInput.length > 120 || phone.length > 30 || customerNote.length > 500) {
     return response(origin, 400, { error: "customer_information_too_long" });
   }
@@ -202,40 +201,49 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const lineChannelId = EXPECTED_LINE_LOGIN_CHANNEL_ID;
-    // Section 14 checks auth.role() = service_role. Use the legacy service-role JWT
-    // server-side so PostgREST receives the service_role role, not a publishable key.
+    // Branch mapping is server-side: LIFF app -> LINE Login channel -> active branch.
+    // Do not accept a branch code selected or posted by the customer.
     const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     const supabaseUrl = requiredEnv("SUPABASE_URL");
-    const lineClaims = await verifyLineIdToken(idToken, lineChannelId);
-    const customerName = customerNameInput || lineClaims.name?.trim() || "LINE Customer";
-
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data: activeBranches, error: branchLookupError } = await admin
+    const { data: app, error: appError } = await admin
+      .from("line_liff_apps")
+      .select("liff_id,line_login_channel_id")
+      .eq("liff_id", liffId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (appError || !app) {
+      console.error("Unregistered LIFF app:", appError?.message ?? liffId);
+      return response(origin, 403, { success: false, error: "LIFF นี้ยังไม่ได้ผูกกับสาขา" });
+    }
+
+    const { data: channel, error: channelError } = await admin
+      .from("line_channels")
+      .select("line_login_channel_id,branch_id")
+      .eq("line_login_channel_id", app.line_login_channel_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (channelError || !channel) {
+      return response(origin, 403, { success: false, error: "ไม่พบ LINE Channel ที่ใช้งานได้สำหรับ LIFF นี้" });
+    }
+
+    const { data: branch, error: branchError } = await admin
       .from("branches")
-      .select("id,branch_code")
-      .eq("is_active", true);
-    if (branchLookupError) {
-      console.error("Active branch lookup failed:", branchLookupError.code, branchLookupError.message);
-      return response(origin, 503, { success: false, error: "ไม่สามารถตรวจสอบสาขาที่เปิดให้บริการได้" });
+      .select("id,branch_code,branch_name")
+      .eq("id", channel.branch_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (branchError || !branch) {
+      return response(origin, 403, { success: false, error: "สาขาที่ผูกกับ LINE นี้ปิดให้บริการหรือไม่มีข้อมูล" });
     }
-    const branchMatches = branchCodeInput
-      ? (activeBranches ?? []).filter((item: { branch_code: string }) => item.branch_code.trim().toUpperCase() === branchCodeInput)
-      : (activeBranches ?? []);
-    if (!branchCodeInput && branchMatches.length > 1) {
-      return response(origin, 409, { success: false, error: "กรุณาเลือกสาขาก่อนยืนยันคำสั่งซื้อ", code: "branch_code_required" });
-    }
-    if (branchMatches.length === 0) {
-      return response(origin, 400, { success: false, error: branchCodeInput ? "ไม่พบรหัสสาขาที่ระบุ หรือสาขาปิดให้บริการ" : "ยังไม่มีสาขาที่เปิดให้บริการ", code: "branch_not_found" });
-    }
-    if (branchMatches.length !== 1) {
-      return response(origin, 409, { success: false, error: "รหัสสาขาไม่สามารถระบุสาขาได้อย่างชัดเจน", code: "branch_code_ambiguous" });
-    }
-    const branchCode = branchMatches[0].branch_code.trim().toUpperCase();
-    const branchId = branchMatches[0].id as string;
+
+    const lineClaims = await verifyLineIdToken(idToken, channel.line_login_channel_id);
+    const customerName = customerNameInput || lineClaims.name?.trim() || "LINE Customer";
+    const branchCode = String(branch.branch_code).trim().toUpperCase();
+    const branchId = branch.id as string;
 
     const { data, error } = await admin.rpc("create_liff_order", {
       p_request_id: requestId,
@@ -261,7 +269,17 @@ Deno.serve(async (req: Request) => {
 
     // Notifications are best-effort; a LINE API failure must not roll back a valid order.
     if (result.success === true && result.duplicate_request !== true) {
-      const accessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN")?.trim();
+      const { data: messagingConfigs, error: messagingConfigError } = await admin.rpc("get_line_messaging_configs");
+      if (messagingConfigError) {
+        console.error("LINE Messaging API config lookup failed:", messagingConfigError.code, messagingConfigError.message);
+      }
+      const branchMessagingConfig = Array.isArray(messagingConfigs)
+        ? messagingConfigs.find((x: Record<string, unknown>) => String(x.branch_id) === branchId)
+        : null;
+      const accessToken = String(branchMessagingConfig?.channel_access_token ?? "").trim()
+        || (branchMessagingConfig?.use_legacy_env_credentials === true
+          ? (Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN")?.trim() ?? "")
+          : "");
       if (accessToken && lineClaims.sub) {
         const orderNumber = String(result.order_number ?? "-");
         const total = Number(result.total_amount ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -297,6 +315,8 @@ Deno.serve(async (req: Request) => {
     return response(origin, 200, {
       ...result,
       branch_code: branchCode,
+      branch: { id: branchId, branch_code: branchCode, branch_name: branch.branch_name },
+      liff_id: liffId,
       success: result.success === true,
       notifications: { customer: customerNotified, staff: staffNotified },
     });
