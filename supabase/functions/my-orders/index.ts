@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
     const liffId = typeof body?.liff_id === "string" ? body.liff_id.trim() : "";
     const limit = Math.max(1, Math.min(20, Number.isInteger(body?.limit) ? body.limit : 10));
     if (!idToken || idToken.length > 12_000) return reply(origin, 400, { error: "line_id_token_required" });
-    if (!/^\\d+-[A-Za-z0-9]+$/.test(liffId)) return reply(origin, 400, { error: "registered_liff_id_required" });
+    if (!/^\d+-[A-Za-z0-9]+$/.test(liffId)) return reply(origin, 400, { error: "registered_liff_id_required" });
 
     const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
       auth: { autoRefreshToken: false, persistSession: false },
