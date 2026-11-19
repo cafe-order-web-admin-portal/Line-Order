@@ -61,11 +61,12 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 
 <script>
 'use strict';
-const LINE_LIFF_ID='2012679988-ORHhLD7I';
+const DEFAULT_LINE_LIFF_ID='2012679988-ORHhLD7I';
+const LINE_LIFF_ID=(new URLSearchParams(location.search).get('liff_id')||DEFAULT_LINE_LIFF_ID).trim();
 const LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login';
 const LINE_SESSION_KEY='ca_line_liff_session_v1';
 const EXTERNAL_RETURN_KEY='ca_external_order_return_v1';
-let selectedBranch=null;
+
 // Save the destination across LINE Login without adding query parameters to
 // the OAuth redirect_uri, which can trigger LINE's 400 Bad Request page.
 (function preserveExternalReturn(){
@@ -88,20 +89,36 @@ let activeRequestId=null;
 let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
 let lastCustomerOrders=[];
 
-function getLineSession(){try{const raw=localStorage.getItem(LINE_SESSION_KEY)||sessionStorage.getItem(LINE_SESSION_KEY)||'null';const s=JSON.parse(raw);if(!s?.idToken||Number(s.expiresAt)<=Date.now()+60000)return null;profile=s.profile||null;return s;}catch(_){return null;}}
+function getLineSession(){
+  try{
+    const raw=localStorage.getItem(LINE_SESSION_KEY)||sessionStorage.getItem(LINE_SESSION_KEY)||'null';
+    const s=JSON.parse(raw);
+    if(!s?.idToken||Number(s.expiresAt)<=Date.now()+60000)return null;
+    if(s.liffId!==LINE_LIFF_ID||!s.branchId||!s.branchCode)return null;
+    profile=s.profile||null;
+    return s;
+  }catch(_){return null;}
+}
 function getLineIdToken(){return getLineSession()?.idToken||null;}
 let liffInitPromise=null;
 async function establishLineSession(){
   if(!window.liff)throw new Error('โหลด LINE LIFF SDK ไม่สำเร็จ กรุณาปิดหน้าแล้วเปิดจาก Rich Menu อีกครั้ง');
-  if(!liffInitPromise){
-    liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
-  }
+  if(!liffInitPromise)liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
   await liffInitPromise;
+  if(liff.id&&liff.id!==LINE_LIFF_ID)throw new Error('LIFF ID ไม่ตรงกับหน้าร้านที่เปิด กรุณาเปิดจาก Rich Menu ของสาขานี้ใหม่');
+  // LIFF restores any URL parameters passed through liff.state after initialization.
+  const returnValue=new URLSearchParams(location.search).get('return');
+  if(returnValue){
+    try{
+      const u=new URL(returnValue);
+      if(u.origin===location.origin&&['/web-order.html','/track-order.html'].includes(u.pathname)){
+        localStorage.setItem(EXTERNAL_RETURN_KEY,u.href);
+        sessionStorage.setItem(EXTERNAL_RETURN_KEY,u.href);
+      }
+    }catch(_){}
+  }
   if(!liff.isLoggedIn()){
-    if(!liff.isInClient()){
-      liff.login({redirectUri:location.href});
-      return null;
-    }
+    if(!liff.isInClient()){liff.login({redirectUri:location.href});return null;}
     throw new Error('ไม่สามารถยืนยันบัญชี LINE ในแอปได้ กรุณาปิดแล้วเปิดจาก Rich Menu อีกครั้ง');
   }
   const idToken=liff.getIDToken();
@@ -111,15 +128,27 @@ async function establishLineSession(){
   const res=await fetch(LINE_LOGIN_FUNCTION_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
-    body:JSON.stringify({id_token:idToken})
+    body:JSON.stringify({id_token:idToken,liff_id:LINE_LIFF_ID})
   });
   const data=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
-  if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ไม่สามารถยืนยันบัญชี LINE ได้');
-  const session={idToken:data.id_token,expiresAt:Number(data.id_token_expires_at)||Date.now()+3600000,profile:data.profile||null};
-  localStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
+  if(!res.ok||!data.success||!data.id_token||!data.branch?.id||!data.branch?.branch_code){
+    throw new Error(data.error||'ไม่สามารถระบุสาขาจาก LIFF ที่เปิดได้ กรุณาตรวจสอบการผูก LINE Channel');
+  }
+  const session={
+    idToken:data.id_token,
+    expiresAt:Number(data.id_token_expires_at)||Date.now()+3600000,
+    profile:data.profile||null,
+    liffId:LINE_LIFF_ID,
+    branchId:data.branch.id,
+    branchCode:data.branch.branch_code,
+    branchName:data.branch.branch_name
+  };
+  localStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
+  sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
   profile=session.profile;
   return session;
 }
+
 
 const $=id=>document.getElementById(id);
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -182,60 +211,26 @@ async function requestLocationOnFirstLogin(){
  $('location-later').onclick=()=>{localStorage.setItem(key,'skipped');closeLocationOnboarding();};
 }
 function hasLocationConsent(){return localStorage.getItem(locationConsentKey())==='granted';}
-function renderBranchPicker(branches, selectedCode=''){
-  let wrap=$('branch-picker');
-  if(!wrap){
-    wrap=document.createElement('div');
-    wrap.id='branch-picker';
-    wrap.style.cssText='display:flex;flex-direction:column;gap:7px;margin:12px 0;padding:12px 14px;background:#fff;border:1px solid #e8e1d7;border-radius:14px;';
-    $('status').parentNode.insertBefore(wrap,$('status'));
+async function loadMenu(){
+  const session=getLineSession();
+  if(!session?.branchId||!session?.branchCode){
+    setStatus('ไม่พบข้อมูลสาขาที่ผูกกับ LINE LIFF นี้ กรุณาติดต่อผู้ดูแลระบบ');
+    $('products').innerHTML='<div class="empty">ไม่สามารถระบุสาขาสำหรับคำสั่งซื้อได้</div>';
+    return;
   }
-  const label=document.createElement('label');
-  label.textContent='เลือกสาขาที่ต้องการสั่งซื้อ';
-  label.style.cssText='font-size:13px;font-weight:600;color:#5b5146;';
-  const select=document.createElement('select');
-  select.id='branch-select';
-  select.style.cssText='width:100%;padding:11px 12px;border:1px solid #ddd3c6;border-radius:10px;background:#fff;font:inherit;color:#29251f;';
-  const placeholder=document.createElement('option');
-  placeholder.value='';placeholder.textContent='— เลือกสาขา —';select.appendChild(placeholder);
-  (branches||[]).forEach(branch=>{
-    const option=document.createElement('option');
-    option.value=branch.branch_code;
-    option.textContent=branch.branch_name+' ('+branch.branch_code+')';
-    select.appendChild(option);
-  });
-  select.value=selectedCode||'';
-  select.disabled=(branches||[]).length<=1;
-  select.addEventListener('change',()=>{
-    if(!select.value)return;
-    cart.clear();activeRequestId=null;updateCart();
-    loadMenu(select.value);
-  });
-  wrap.replaceChildren(label,select);
-}
-async function loadMenu(branchCodeOverride=''){
-  const params=new URLSearchParams(location.search);
-  const requested=String(branchCodeOverride||params.get('branch')||params.get('branch_code')||params.get('branchCode')||'').trim().toUpperCase();
-  setStatus('กำลังโหลดข้อมูลสาขา…');
-  const branchRes=await db.from('branches').select('id,branch_code,branch_name').eq('is_active',true).order('branch_code',{ascending:true});
-  if(branchRes.error){setStatus('อ่านข้อมูลสาขาไม่สำเร็จ: '+branchRes.error.message);$('products').innerHTML='<div class="empty">โหลดข้อมูลสาขาไม่สำเร็จ</div>';return;}
-  const branches=branchRes.data||[];
-  let branch=null;
-  if(requested){
-    branch=branches.find(x=>String(x.branch_code||'').trim().toUpperCase()===requested)||null;
-    if(!branch){renderBranchPicker(branches,'');setStatus('ไม่พบสาขารหัส '+requested+' กรุณาตรวจสอบลิงก์หรือเลือกสาขาใหม่');$('products').innerHTML='<div class="empty">ไม่พบสาขาที่ระบุ ระบบจะไม่เปลี่ยนไปเลือกสาขาอื่นอัตโนมัติ</div>';return;}
-  }else if(branches.length===1){
-    branch=branches[0];
-  }else if(branches.length>1){
-    renderBranchPicker(branches,'');setStatus('พบ '+branches.length+' สาขา กรุณาเลือกสาขาก่อนดูเมนู');$('products').innerHTML='<div class="empty">กรุณาเลือกสาขาเพื่อแสดงเมนูและราคาที่ถูกต้อง</div>';return;
-  }else{
-    renderBranchPicker([],'');setStatus('ยังไม่มีสาขาที่เปิดให้บริการ');$('products').innerHTML='<div class="empty">ไม่พบสาขาที่เปิดให้บริการ</div>';return;
+  setStatus('กำลังโหลดเมนู '+esc(session.branchName||session.branchCode)+'…');
+  const branchRes=await db.from('branches')
+    .select('id,branch_code,branch_name')
+    .eq('id',session.branchId)
+    .eq('branch_code',session.branchCode)
+    .eq('is_active',true)
+    .single();
+  if(branchRes.error||!branchRes.data){
+    setStatus('ไม่สามารถโหลดข้อมูลสาขาที่ผูกกับ LINE LIFF นี้ได้');
+    $('products').innerHTML='<div class="empty">ตรวจสอบการตั้งค่าสาขาและสถานะ Branch</div>';
+    return;
   }
-  selectedBranch=branch;
-  renderBranchPicker(branches,branch.branch_code);
-  const selectedUrl=new URL(location.href);
-  selectedUrl.searchParams.set('branch',branch.branch_code);
-  history.replaceState({},'',selectedUrl.toString());
+  const branch=branchRes.data;
   const [catRes,linkRes]=await Promise.all([
     db.from('categories').select('id,category_name,sort_order,is_active').eq('is_active',true).order('sort_order',{ascending:true}),
     db.from('branch_products').select('product_id,price,is_available').eq('branch_id',branch.id)
@@ -311,14 +306,13 @@ async function submitOrder(){
   const idToken=getLineIdToken();
   if(!idToken){$('order-error').textContent='เซสชัน LINE หมดอายุ กรุณารีเฟรชหน้าเพื่อเข้าสู่ระบบอีกครั้ง';return;}
   if(!cart.size){$('order-error').textContent='กรุณาเลือกสินค้าอย่างน้อย 1 รายการ';return;}
-  if(!selectedBranch){$('order-error').textContent='กรุณาเลือกสาขาก่อนยืนยันคำสั่งซื้อ';return;}
   const items=[...cart.values()].map(x=>({product_id:x.product.id,quantity:x.qty,option_ids:x.optionIds}));
   const button=$('confirm-order');button.disabled=true;button.textContent='กำลังส่งคำสั่งซื้อ…';
   if(!activeRequestId)activeRequestId=crypto.randomUUID();
   try{
     // Read location only after explicit consent after LINE login; GPS failure never blocks checkout.
     const checkoutPosition=hasLocationConsent()?await getCurrentPosition().catch(e=>{console.info('Location not shared:',e.message);return null;}):null;
-    const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),branch_code:selectedBranch?.branch_code||'',items})});
+    const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),liff_id:LINE_LIFF_ID,items})});
     const result=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
     if(!res.ok||result.success!==true)throw new Error(result.error||'ไม่สามารถสร้างคำสั่งซื้อได้');
     cart.clear();activeRequestId=null;updateCart();hideModal('cart-modal');
@@ -428,7 +422,7 @@ async function loadMyOrders(){
   const token=getLineIdToken();if(!token)return;
   trackingLoading=true;
   try{
-    const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:token,limit:10})});
+    const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:token,liff_id:LINE_LIFF_ID,limit:10})});
     const data=await res.json().catch(()=>({error:'invalid_response'}));
     if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดประวัติได้');
     const orders=data.orders||[];lastCustomerOrders=orders;
