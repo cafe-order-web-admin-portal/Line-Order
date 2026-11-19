@@ -74,7 +74,7 @@ const BRANCH_CODE='PKT001';
  try{
   const u=new URL(value);
   const allowed=u.origin===location.origin && ['/web-order.html','/track-order.html'].includes(u.pathname);
-  if(allowed)sessionStorage.setItem(EXTERNAL_RETURN_KEY,u.href);
+  if(allowed){localStorage.setItem(EXTERNAL_RETURN_KEY,u.href);sessionStorage.setItem(EXTERNAL_RETURN_KEY,u.href);}
  }catch(_){}
 })();
 const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
@@ -88,7 +88,7 @@ let activeRequestId=null;
 let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
 let lastCustomerOrders=[];
 
-function getLineSession(){try{const s=JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null');if(!s?.idToken||Number(s.expiresAt)<=Date.now()+60000)return null;profile=s.profile||null;return s;}catch(_){return null;}}
+function getLineSession(){try{const raw=localStorage.getItem(LINE_SESSION_KEY)||sessionStorage.getItem(LINE_SESSION_KEY)||'null';const s=JSON.parse(raw);if(!s?.idToken||Number(s.expiresAt)<=Date.now()+60000)return null;profile=s.profile||null;return s;}catch(_){return null;}}
 function getLineIdToken(){return getLineSession()?.idToken||null;}
 let liffInitPromise=null;
 async function establishLineSession(){
@@ -116,7 +116,7 @@ async function establishLineSession(){
   const data=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
   if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ไม่สามารถยืนยันบัญชี LINE ได้');
   const session={idToken:data.id_token,expiresAt:Number(data.id_token_expires_at)||Date.now()+3600000,profile:data.profile||null};
-  sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
+  localStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
   profile=session.profile;
   return session;
 }
@@ -148,9 +148,9 @@ async function start(){
   location.replace(new URL('./track-order.html',location.href).href);
   return;
  }
- const returnParam=sessionStorage.getItem(EXTERNAL_RETURN_KEY);
+ const returnParam=localStorage.getItem(EXTERNAL_RETURN_KEY)||sessionStorage.getItem(EXTERNAL_RETURN_KEY);
  if(returnParam){
-  sessionStorage.removeItem(EXTERNAL_RETURN_KEY);
+  localStorage.removeItem(EXTERNAL_RETURN_KEY);sessionStorage.removeItem(EXTERNAL_RETURN_KEY);
   try{const target=new URL(returnParam);if(target.origin===location.origin&&['/web-order.html','/track-order.html'].includes(target.pathname)){location.replace(target.href);return;}}
   catch(error){console.warn('Invalid external return URL:',error);}
  }
