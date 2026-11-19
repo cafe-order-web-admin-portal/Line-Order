@@ -172,7 +172,9 @@ async function start(){
  catch(e){document.documentElement.classList.remove('track-route-pending');console.error('LINE Login:',e);setStatus(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ');$('products').innerHTML='<div class="empty">'+esc(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ')+'<br><button class="primary" style="margin-top:12px" onclick="location.reload()">ลองอีกครั้ง</button></div>';return;}
  const params=new URLSearchParams(location.search);
  if(params.get('page')==='track'){
-  location.replace(new URL('./track-order.html',location.href).href);
+  const trackingUrl=new URL('./track-order.html',location.href);
+  trackingUrl.search=new URLSearchParams({liff_id:LINE_LIFF_ID,v:'20261119-trackfix2'}).toString();
+  location.replace(trackingUrl.href);
   return;
  }
  const returnParam=localStorage.getItem(EXTERNAL_RETURN_KEY)||sessionStorage.getItem(EXTERNAL_RETURN_KEY);
