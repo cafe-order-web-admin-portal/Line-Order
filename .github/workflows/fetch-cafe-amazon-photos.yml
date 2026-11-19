@@ -1,0 +1,29 @@
+name: Fetch Cafe Amazon Product Photos
+on:
+  workflow_dispatch:
+    inputs:
+      menu_url:
+        description: Wongnai Cafe Amazon menu URL
+        required: true
+        default: https://www.wongnai.com/delivery/businesses/372165Fm/order
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+      - name: Fetch and name product photos
+        env:
+          MENU_URL: ${{ inputs.menu_url }}
+        run: python scripts/fetch_cafe_amazon_photos.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cafe-amazon-product-photos
+          path: product-photos/
+          retention-days: 14
