@@ -358,7 +358,7 @@
     }).sort((a,b)=>new Date(b.last?.created_at||0)-new Date(a.last?.created_at||0));
     const selected=conversationRows.find(x=>x.uid===state.selectedChatUserId);
     const fmtTime=value=>value?new Date(value).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}):'-';
-    const messageLabel=m=>m.message_text||({image:'ส่งรูปภาพ',video:'ส่งวิดีโอ',audio:'ส่งเสียง',file:'ส่งไฟล์',sticker:'ส่งสติกเกอร์',follow:'เพิ่มเพื่อน',unfollow:'บล็อกบัญชี'}[m.message_type]||'กิจกรรม LINE');
+    const messageLabel=m=>m.message_text||({image:'ส่งรูปภาพ',video:'ส่งวิดีโอ',audio:'ส่งเสียง',file:'ส่งไฟล์',sticker:'ส่งสติกเกอร์',follow:'เพิ่มเพื่อน',unfollow:'บล็อกบัญชี',unsend:'ยกเลิกการส่งข้อความ'}[m.message_type]||'กิจกรรม LINE');
     return `<div class="page-head"><div><h2>ข้อมูลลูกค้า LINE</h2><p>ข้อมูลลูกค้าและประวัติการสนทนาจาก LINE Official Account</p></div><span class="pill">${customers.length} รายชื่อ · ${conversationRows.length} บทสนทนา</span></div>
       <div class="panel"><div class="toolbar"><input id="customer-search" class="search" placeholder="ค้นหาชื่อ / LINE UID / เบอร์โทร…" value="${esc(state.customerSearch)}"><span class="muted small">ลูกค้าสูงสุด 500 ราย · ประวัติแชทล่าสุด 1,000 ข้อความ</span></div></div>
       <div class="panel"><div class="panel-title"><h3>ประวัติการสนทนา LINE</h3><span class="muted small">จัดเก็บข้อความใหม่จาก Webhook ตั้งแต่เปิดใช้งาน</span></div>
