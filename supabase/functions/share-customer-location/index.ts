@@ -76,7 +76,7 @@ Deno.serve(async (req: Request) => {
     const liffId = typeof body?.liff_id === "string" ? body.liff_id.trim() : "";
     const orderId = typeof body?.order_id === "string" ? body.order_id.trim() : "";
     const action = typeof body?.action === "string" ? body.action : "";
-    if (!idToken || idToken.length > 12000 || !/^\\d+-[A-Za-z0-9]+$/.test(liffId) || !orderId || !["start", "update", "stop"].includes(action)) {
+    if (!idToken || idToken.length > 12000 || !/^\d+-[A-Za-z0-9]+$/.test(liffId) || !orderId || !["start", "update", "stop"].includes(action)) {
       return reply(origin, 400, { error: "invalid_location_request" });
     }
 
