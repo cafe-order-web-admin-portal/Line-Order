@@ -60,7 +60,7 @@ const LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/function
 const LINE_SESSION_KEY='ca_line_liff_session_v1';
 const ORDER_ENTRY_CHANNEL='external-web';
 const REGISTERED_LIFF_ENDPOINT='https://cafe-order-web-admin-portal.github.io/Line-Order/cafe-amazon-liff-index.html?channel=web';
-const BRANCH_CODE='B0001'; // รหัสสาขาจากหลังร้าน (CMS) — ซิงก์อัตโนมัติ · PKT001 = รหัสเดิม (สำรองช่วงเปลี่ยน)
+let selectedBranch=null;
 const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
 const TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders';
 const LOCATION_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/share-customer-location';
@@ -145,11 +145,61 @@ async function requestLocationOnFirstLogin(){
  $('location-later').onclick=()=>{localStorage.setItem(key,'skipped');closeLocationOnboarding();};
 }
 function hasLocationConsent(){return localStorage.getItem(locationConsentKey())==='granted';}
-async function loadMenu(){
-  setStatus('กำลังค้นหาสาขา '+BRANCH_CODE+'…');
-  const branchRes=await db.from('branches').select('id,branch_code,branch_name').in('branch_code',[BRANCH_CODE,'PKT001']).order('branch_code').limit(1).single();
-  if(branchRes.error||!branchRes.data){setStatus('ค้นหาสาขาไม่สำเร็จ: '+(branchRes.error?.message||'ไม่พบสาขา'));$('products').innerHTML='<div class="empty">ไม่พบข้อมูลสาขา กรุณาตรวจสอบรหัสสาขา</div>';return;}
-  const branch=branchRes.data;
+function renderBranchPicker(branches, selectedCode=''){
+  let wrap=$('branch-picker');
+  if(!wrap){
+    wrap=document.createElement('div');
+    wrap.id='branch-picker';
+    wrap.style.cssText='display:flex;flex-direction:column;gap:7px;margin:12px 0;padding:12px 14px;background:#fff;border:1px solid #e8e1d7;border-radius:14px;';
+    $('status').parentNode.insertBefore(wrap,$('status'));
+  }
+  const label=document.createElement('label');
+  label.textContent='เลือกสาขาที่ต้องการสั่งซื้อ';
+  label.style.cssText='font-size:13px;font-weight:600;color:#5b5146;';
+  const select=document.createElement('select');
+  select.id='branch-select';
+  select.style.cssText='width:100%;padding:11px 12px;border:1px solid #ddd3c6;border-radius:10px;background:#fff;font:inherit;color:#29251f;';
+  const placeholder=document.createElement('option');
+  placeholder.value='';placeholder.textContent='— เลือกสาขา —';select.appendChild(placeholder);
+  (branches||[]).forEach(branch=>{
+    const option=document.createElement('option');
+    option.value=branch.branch_code;
+    option.textContent=branch.branch_name+' ('+branch.branch_code+')';
+    select.appendChild(option);
+  });
+  select.value=selectedCode||'';
+  select.disabled=(branches||[]).length<=1;
+  select.addEventListener('change',()=>{
+    if(!select.value)return;
+    cart.clear();activeRequestId=null;updateCart();
+    loadMenu(select.value);
+  });
+  wrap.replaceChildren(label,select);
+}
+async function loadMenu(branchCodeOverride=''){
+  const params=new URLSearchParams(location.search);
+  const requested=String(branchCodeOverride||params.get('branch')||params.get('branch_code')||params.get('branchCode')||'').trim().toUpperCase();
+  setStatus('กำลังโหลดข้อมูลสาขา…');
+  const branchRes=await db.from('branches').select('id,branch_code,branch_name').eq('is_active',true).order('branch_code',{ascending:true});
+  if(branchRes.error){setStatus('อ่านข้อมูลสาขาไม่สำเร็จ: '+branchRes.error.message);$('products').innerHTML='<div class="empty">โหลดข้อมูลสาขาไม่สำเร็จ</div>';return;}
+  const branches=branchRes.data||[];
+  let branch=null;
+  if(requested){
+    branch=branches.find(x=>String(x.branch_code||'').trim().toUpperCase()===requested)||null;
+    if(!branch){renderBranchPicker(branches,'');setStatus('ไม่พบสาขารหัส '+requested+' กรุณาตรวจสอบลิงก์หรือเลือกสาขาใหม่');$('products').innerHTML='<div class="empty">ไม่พบสาขาที่ระบุ ระบบจะไม่เปลี่ยนไปเลือกสาขาอื่นอัตโนมัติ</div>';return;}
+  }else if(branches.length===1){
+    branch=branches[0];
+  }else if(branches.length>1){
+    renderBranchPicker(branches,'');setStatus('พบ '+branches.length+' สาขา กรุณาเลือกสาขาก่อนดูเมนู');$('products').innerHTML='<div class="empty">กรุณาเลือกสาขาเพื่อแสดงเมนูและราคาที่ถูกต้อง</div>';return;
+  }else{
+    renderBranchPicker([],'');setStatus('ยังไม่มีสาขาที่เปิดให้บริการ');$('products').innerHTML='<div class="empty">ไม่พบสาขาที่เปิดให้บริการ</div>';return;
+  }
+  selectedBranch=branch;
+  renderBranchPicker(branches,branch.branch_code);
+  const selectedUrl=new URL(location.href);
+  selectedUrl.searchParams.set('branch',branch.branch_code);
+  history.replaceState({},'',selectedUrl.toString());
+  const [catRes,linkRes]=await Promise.all([
   const [catRes,linkRes]=await Promise.all([
     db.from('categories').select('id,category_name,sort_order,is_active').eq('is_active',true).order('sort_order',{ascending:true}),
     db.from('branch_products').select('product_id,price,is_available').eq('branch_id',branch.id)
@@ -225,13 +275,14 @@ async function submitOrder(){
   const idToken=getLineIdToken();
   if(!idToken){$('order-error').textContent='เซสชัน LINE หมดอายุ กรุณารีเฟรชหน้าเพื่อเข้าสู่ระบบอีกครั้ง';return;}
   if(!cart.size){$('order-error').textContent='กรุณาเลือกสินค้าอย่างน้อย 1 รายการ';return;}
+  if(!selectedBranch){$('order-error').textContent='กรุณาเลือกสาขาก่อนยืนยันคำสั่งซื้อ';return;}
   const items=[...cart.values()].map(x=>({product_id:x.product.id,quantity:x.qty,option_ids:x.optionIds}));
   const button=$('confirm-order');button.disabled=true;button.textContent='กำลังส่งคำสั่งซื้อ…';
   if(!activeRequestId)activeRequestId=crypto.randomUUID();
   try{
     // Read location only after explicit consent after LINE login; GPS failure never blocks checkout.
     const checkoutPosition=hasLocationConsent()?await getCurrentPosition().catch(e=>{console.info('Location not shared:',e.message);return null;}):null;
-    const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),items})});
+    const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),branch_code:selectedBranch?.branch_code||'',items})});
     const result=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
     if(!res.ok||result.success!==true)throw new Error(result.error||'ไม่สามารถสร้างคำสั่งซื้อได้');
     cart.clear();activeRequestId=null;updateCart();hideModal('cart-modal');
