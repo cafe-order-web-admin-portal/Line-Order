@@ -1,6 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.119.0";
 
-const CHANNEL_ID = "2012679988";
 const VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
 const ALLOWED_ORIGINS = new Set([
   "https://cafe-order-web-admin-portal.github.io",
@@ -49,34 +48,73 @@ Deno.serve(async (req: Request) => {
     if (contentLength > 16000) return reply(origin, 413, { error: "request_too_large" });
     const body = await req.json();
     const idToken = typeof body?.id_token === "string" ? body.id_token.trim() : "";
+    const liffId = typeof body?.liff_id === "string" ? body.liff_id.trim() : "";
     if (!idToken || idToken.length > 12000 || idToken.split(".").length !== 3) {
       return reply(origin, 400, { error: "invalid_liff_id_token" });
     }
+    if (!/^\\d+-[A-Za-z0-9]+$/.test(liffId)) {
+      return reply(origin, 400, { error: "invalid_liff_app_id" });
+    }
 
-    // Verify the LIFF-issued ID token server-side. Never trust profile data sent by the browser.
+    const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Resolve the branch from the registered LIFF app. The browser never selects a branch.
+    const { data: app, error: appError } = await admin
+      .from("line_liff_apps")
+      .select("liff_id,line_login_channel_id")
+      .eq("liff_id", liffId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (appError || !app) {
+      console.error("LIFF app is not registered:", appError?.message ?? liffId);
+      return reply(origin, 403, { error: "LIFF นี้ยังไม่ได้ผูกกับสาขา กรุณาติดต่อผู้ดูแลระบบ" });
+    }
+
+    const { data: channel, error: channelError } = await admin
+      .from("line_channels")
+      .select("line_login_channel_id,branch_id")
+      .eq("line_login_channel_id", app.line_login_channel_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (channelError || !channel) {
+      console.error("LINE channel mapping is inactive or missing:", channelError?.message ?? app.line_login_channel_id);
+      return reply(origin, 403, { error: "ไม่พบการตั้งค่า LINE Channel ของสาขานี้" });
+    }
+
+    const { data: branch, error: branchError } = await admin
+      .from("branches")
+      .select("id,branch_code,branch_name")
+      .eq("id", channel.branch_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (branchError || !branch) {
+      return reply(origin, 403, { error: "สาขาที่ผูกกับ LINE นี้ปิดให้บริการหรือไม่มีข้อมูล" });
+    }
+
+    const channelId = channel.line_login_channel_id;
+    // LINE confirms the token audience against the channel bound to this LIFF registration.
     const verifyResponse = await fetch(VERIFY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ id_token: idToken, client_id: CHANNEL_ID }),
+      body: new URLSearchParams({ id_token: idToken, client_id: channelId }),
     });
     const claims = await verifyResponse.json().catch(() => ({}));
     const now = Math.floor(Date.now() / 1000);
-    if (!verifyResponse.ok || claims.aud !== CHANNEL_ID ||
+    if (!verifyResponse.ok || claims.aud !== channelId ||
         claims.iss !== "https://access.line.me" ||
         typeof claims.sub !== "string" || !claims.sub ||
         !Number.isFinite(Number(claims.exp)) || Number(claims.exp) <= now) {
       console.error("LIFF ID token verification failed", {
         status: verifyResponse.status,
+        expectedChannel: channelId,
         aud: claims.aud ?? null,
         iss: claims.iss ?? null,
         hasSubject: typeof claims.sub === "string",
       });
       return reply(origin, 401, { error: "LINE ID Token ไม่ผ่านการตรวจสอบ กรุณาเปิดจาก Rich Menu ใหม่" });
     }
-
-    const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
     const lineUserId = claims.sub as string;
     const customerName = typeof claims.name === "string" && claims.name.trim()
       ? claims.name.trim().slice(0, 120)
@@ -105,6 +143,12 @@ Deno.serve(async (req: Request) => {
       success: true,
       id_token: idToken,
       id_token_expires_at: Number(claims.exp) * 1000,
+      liff_id: liffId,
+      branch: {
+        id: branch.id,
+        branch_code: branch.branch_code,
+        branch_name: branch.branch_name,
+      },
       profile: {
         userId: lineUserId,
         displayName: customerName,
