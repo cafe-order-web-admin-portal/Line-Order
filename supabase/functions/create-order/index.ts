@@ -173,7 +173,7 @@ Deno.serve(async (req: Request) => {
   const rawItems = body.items;
 
   if (!idToken || idToken.length > 12_000) return response(origin, 400, { error: "line_id_token_required" });
-  if (!/^\\d+-[A-Za-z0-9]+$/.test(liffId)) return response(origin, 400, { error: "registered_liff_id_required" });
+  if (!/^\d+-[A-Za-z0-9]+$/.test(liffId)) return response(origin, 400, { error: "registered_liff_id_required" });
   if (!UUID_RE.test(requestId)) return response(origin, 400, { error: "request_id_must_be_uuid" });
   if (customerNameInput.length > 120 || phone.length > 30 || customerNote.length > 500) {
     return response(origin, 400, { error: "customer_information_too_long" });
