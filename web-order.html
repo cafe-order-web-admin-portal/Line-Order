@@ -439,6 +439,94 @@ main>.section-title:first-of-type{margin-top:2px!important}
   .cartbar{grid-template-columns:minmax(0,1fr) 1px minmax(122px,.86fr)!important;gap:8px!important;padding-left:9px!important;padding-right:9px!important}
 }
 
+
+/* Exact uploaded reference header: use the supplied Café Amazon header card as the base artwork. */
+.menu-header{
+  position:relative!important;
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  aspect-ratio:1200 / 409!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0 auto!important;
+  padding:0!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:0 0 18px 18px!important;
+  isolation:isolate!important;
+  background-image:url('./assets/cafe-amazon-header-reference.webp?v=1')!important;
+  background-position:center center!important;
+  background-size:100% 100%!important;
+  background-repeat:no-repeat!important;
+  box-shadow:0 3px 12px rgba(11,55,34,.10)!important;
+}
+.menu-header .brand-side{display:none!important}
+.menu-header .header-refresh{
+  position:absolute!important;
+  top:29%!important;
+  right:6.1%!important;
+  width:10%!important;
+  height:22%!important;
+  min-width:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:50%!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:transparent!important;
+  z-index:3!important;
+}
+.menu-header .header-refresh svg{opacity:0!important;width:100%!important;height:100%!important}
+.menu-header .menu-search{
+  position:absolute!important;
+  left:4.1%!important;
+  top:54.1%!important;
+  width:91.8%!important;
+  height:26.7%!important;
+  margin:0!important;
+  padding:0 4.5% 0 12.2%!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:7px!important;
+  border:0!important;
+  border-radius:999px!important;
+  background:#fff!important;
+  color:#28352d!important;
+  box-shadow:0 1px 2px rgba(0,0,0,.04)!important;
+  z-index:2!important;
+}
+.menu-header .menu-search .search-icon{display:none!important}
+.menu-header .menu-search .search-icon-svg{
+  position:absolute!important;
+  left:4.3%!important;
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  width:19px!important;height:19px!important;
+  display:block!important;
+  color:#222!important;
+  fill:none!important;
+  stroke:currentColor!important;
+  stroke-width:2.1!important;
+}
+.menu-header .menu-search input{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  min-width:0!important;
+  padding:0!important;
+  border:0!important;
+  outline:0!important;
+  background:transparent!important;
+  color:#303630!important;
+  font:500 clamp(10px,3vw,13px)/1.2 'IBM Plex Sans Thai',sans-serif!important;
+  box-shadow:none!important;
+}
+.menu-header .menu-search input::placeholder{color:#68706a!important;opacity:1!important}
+@media(min-width:560px){
+  .menu-header{max-width:760px!important;border-radius:0 0 20px 20px!important}
+}
+
 </style>
 </head>
 <body>
@@ -450,7 +538,7 @@ main>.section-title:first-of-type{margin-top:2px!important}
     </div>
     <button class="header-refresh" id="refresh-button" type="button" aria-label="รีเฟรชเมนู" title="รีเฟรชเมนู"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19.1 12A7.5 7.5 0 0 0 6.3 6.5L4 9"/><path d="M4 17v-5h5"/><path d="M4.9 12A7.5 7.5 0 0 0 17.7 17.5L20 15"/></svg></button>
   </div>
-  <label class="menu-search" for="menu-search"><span class="search-icon" aria-hidden="true">⌕</span><input id="menu-search" type="search" placeholder="ค้นหาเมนูเครื่องดื่ม" autocomplete="off" aria-label="ค้นหาเมนู"></label>
+  <label class="menu-search" for="menu-search"><svg class="search-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.7"></circle><path d="m16 16 5 5"></path></svg><input id="menu-search" type="search" placeholder="ค้นหาเมนูที่ชอบ" autocomplete="off" aria-label="ค้นหาเมนู"></label>
 </header>
 <main>
   <p class="status" id="status">กำลังเชื่อมต่อระบบ…</p>
