@@ -3,12 +3,18 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#5b3a27"><title>Café Amazon | สั่งเครื่องดื่ม</title>
+<script>try{if(new URLSearchParams(location.search).get("page")==="track")document.documentElement.classList.add("track-route-pending");}catch(_){}</script>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
 <script src="./assets/config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
+<style>html.track-route-pending body{padding:0;min-height:100vh;overflow:hidden}
+html.track-route-pending header,html.track-route-pending main,html.track-route-pending .cartbar,html.track-route-pending .modal,html.track-route-pending .location-onboarding{display:none!important}
+html.track-route-pending body:before{content:"กำลังเปิดหน้าติดตามคำสั่งซื้อ";position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:#f7f4ed;color:#176b45;font:600 16px 'IBM Plex Sans Thai',sans-serif}
+html.track-route-pending body:after{content:"";position:fixed;z-index:100000;left:calc(50% - 13px);top:calc(50% - 52px);width:26px;height:26px;border:3px solid #dce9df;border-top-color:#176b45;border-radius:50%;animation:trackRouteSpin .8s linear infinite}
+@keyframes trackRouteSpin{to{transform:rotate(360deg)}}
+
 :root{--coffee:#593b2b;--green:#176b45;--cream:#f7f4ed;--ink:#29251f;--muted:#827b70;--line:#e9e3d9;--warning:#a85b16;--danger:#a3342b;--success:#176b45}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:'IBM Plex Sans Thai',sans-serif;padding-bottom:96px}
 header{background:linear-gradient(120deg,#4b3024,#75513a);color:white;padding:22px 18px 24px;border-radius:0 0 22px 22px}
@@ -136,7 +142,7 @@ function cartLineUnitPrice(line){return Number(line.product.price)+optionDelta(l
 async function start(){
  if(!db){setStatus('ไม่พบการตั้งค่า Supabase — ตรวจสอบ assets/config.js');$('products').innerHTML='<div class="empty">ยังเชื่อมต่อฐานข้อมูลไม่ได้</div>';return;}
  try{setStatus('กำลังเข้าสู่ระบบ LINE…');const session=await establishLineSession();if(!session)return;if(profile?.displayName)$('customer-name').value=profile.displayName;}
- catch(e){console.error('LINE Login:',e);setStatus(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ');$('products').innerHTML='<div class="empty">'+esc(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ')+'<br><button class="primary" style="margin-top:12px" onclick="location.reload()">ลองอีกครั้ง</button></div>';return;}
+ catch(e){document.documentElement.classList.remove('track-route-pending');console.error('LINE Login:',e);setStatus(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ');$('products').innerHTML='<div class="empty">'+esc(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ')+'<br><button class="primary" style="margin-top:12px" onclick="location.reload()">ลองอีกครั้ง</button></div>';return;}
  const params=new URLSearchParams(location.search);
  if(params.get('page')==='track'){
   location.replace(new URL('./track-order.html',location.href).href);
