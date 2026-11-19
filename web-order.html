@@ -191,6 +191,7 @@ const LOCATION_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/
 const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{};
 const db=(cfg.url&&cfg.publishableKey&&window.supabase)?window.supabase.createClient(cfg.url,cfg.publishableKey):null;
 let profile=null,allProducts=[],activeCategory='all',cart=new Map();
+let liffInitPromise=null;
 let optionGroups=[],optionChoices=[],productGroupLinks=[],productOptionLinks=[],currentProduct=null;
 let activeRequestId=null;
 let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false, locationHeartbeatTimer=null;
