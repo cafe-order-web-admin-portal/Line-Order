@@ -110,6 +110,51 @@ main{padding:13px 13px 18px}
 .photo img.photo-photo{mix-blend-mode:multiply!important;filter:drop-shadow(0 7px 7px rgba(38,29,20,.17))!important}
 .photo-plate{bottom:5%;height:50%;background:radial-gradient(ellipse at 50% 45%,#fffefa 0 57%,#e5e1d8 59% 63%,#fffefa 66% 74%,rgba(255,255,255,.1) 75%)!important;box-shadow:0 8px 14px rgba(45,32,18,.18),inset 0 2px 5px rgba(255,255,255,.95)!important}
 
+
+/* Critical mobile menu visibility and product-photo corrections */
+header{
+  position:sticky!important;
+  top:0!important;
+  z-index:30!important;
+  isolation:isolate;
+}
+header .top,header .brand,header .sub,header .branch,header .hero{visibility:visible!important;opacity:1!important}
+.menu-search{position:relative;z-index:2}
+.card .photo img,.card .photo img.photo-cutout,.card .photo img.photo-photo{
+  display:block!important;visibility:visible!important;opacity:1!important;
+  mix-blend-mode:normal!important;
+}
+.card .photo img.photo-photo{filter:drop-shadow(0 7px 7px rgba(38,29,20,.18))!important}
+.card .photo img.photo-cutout{filter:drop-shadow(0 8px 8px rgba(28,35,25,.2))!important}
+.card .row .add{
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  flex:0 0 auto!important;width:auto!important;min-width:86px!important;min-height:40px!important;
+  padding:8px 12px!important;border-radius:11px!important;
+  background:#ef5d50!important;color:#fff!important;border:0!important;
+  font:700 12px/1.2 'IBM Plex Sans Thai',sans-serif!important;
+  letter-spacing:0!important;text-indent:0!important;white-space:nowrap!important;
+  opacity:1!important;visibility:visible!important;
+  -webkit-appearance:none!important;appearance:none!important;
+  box-shadow:0 4px 10px rgba(239,93,80,.22)!important;
+}
+.card .row .add:disabled{
+  background:#9ba69e!important;color:#fff!important;opacity:1!important;
+  box-shadow:none!important;cursor:not-allowed!important;
+}
+.card .name{color:#183f2e!important}
+.photo-plate{z-index:1!important}
+.card .photo img{z-index:2!important}
+@media(max-width:600px){
+  header{padding:12px 14px 14px!important;border-radius:0 0 18px 18px!important}
+  .brand{font-size:17px!important}
+  .hero{font-size:17px!important}
+  .branch{margin-top:8px!important}
+  .menu-search{height:46px!important}
+  .card .row{align-items:center!important;gap:6px!important}
+  .card .row .price{font-size:15px!important}
+  .card .row .add{min-width:82px!important;min-height:38px!important;font-size:11px!important}
+}
+
 </style>
 </head>
 <body>
@@ -257,6 +302,9 @@ async function start(){
  }
  await requestLocationOnFirstLogin();
  await loadMenu();
+ // LINE's in-app browser can restore a previous scroll offset. Always reopen at the menu header.
+ window.history.scrollRestoration='manual';
+ requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'instant'}));
 }
 const LOCATION_ONBOARDING_KEY='ca_location_onboarding_v1';
 function locationConsentKey(){return LOCATION_ONBOARDING_KEY+':'+(profile?.userId||'anonymous');}
@@ -338,10 +386,14 @@ function renderProducts(){
   const query=($('menu-search')?.value||'').trim().toLocaleLowerCase('th');
   const list=query?base.filter(p=>(String(p.product_name||'')+' '+String(p.product_code||'')+' '+String(p.description||'')).toLocaleLowerCase('th').includes(query)):base;
   $('products').innerHTML=list.length?list.map(p=>{
-    const code=String(p.product_code||'');
-    const isFood=code.startsWith('CA-BAK')&&!/(น้ำ|เครื่องดื่ม)/.test(String(p.product_name||''));
-    const photoClass=isFood?'photo-food':'photo-drink';
-    return '<article class="card"><div class="photo '+photoClass+'">'+(isFood?'<span class="photo-plate" aria-hidden="true"></span>':'')+(p.image_url?'<img loading="lazy" class="'+(/\.(png|webp|avif)(?:\?|$)/i.test(p.image_url)?'photo-cutout':'photo-photo')+'" src="'+esc(p.image_url)+'" alt="'+esc(p.product_name)+'">':'<span class="photo-fallback" aria-hidden="true">☕</span>')+'</div><div class="info"><div class="name">'+esc(p.product_name)+'</div><div class="row"><span class="price">'+(p.price>0?money(p.price):'รอระบุราคา')+'</span><button class="add" data-add="'+esc(p.id)+'" '+(p.can_order?'':'disabled')+'>'+(p.can_order?'+ เพิ่ม':'ยังไม่เปิดขาย')+'</button></div>'+(p.can_order?'':'<span class="badge">รอเปิดสถานะขายของสาขา</span>')+'</div></article>';
+    const name=String(p.product_name||'');
+    // Plate only for ready-to-eat bakery / hot-food items.
+    // Packaged snacks, drinks in bottles/cans and bagged products remain on the tabletop.
+    const serveOnPlate=/(แซนวิช|แซนด์วิช|ครัวซอง|โทสต์|เดนิช|วาฟเฟิล|มัฟฟิน|พาย|เค้ก|บราวนี่|ขนมปั้นขลิบ|ขนมปัง)/i.test(name);
+    const photoClass=serveOnPlate?'photo-food':'photo-drink';
+    const imageClass=/\.(png|webp|avif)(?:\?|$)/i.test(String(p.image_url||''))?'photo-cutout':'photo-photo';
+    const addLabel=p.can_order?'+ เพิ่ม':'ยังไม่เปิดขาย';
+    return '<article class="card"><div class="photo '+photoClass+'">'+(serveOnPlate?'<span class="photo-plate" aria-hidden="true"></span>':'')+(p.image_url?'<img loading="lazy" class="'+imageClass+'" src="'+esc(p.image_url)+'" alt="'+esc(name)+'">':'<span class="photo-fallback" aria-hidden="true">☕</span>')+'</div><div class="info"><div class="name">'+esc(name)+'</div><div class="row"><span class="price">'+(p.price>0?money(p.price):'รอระบุราคา')+'</span><button type="button" class="add" data-add="'+esc(p.id)+'" '+(p.can_order?'':'disabled aria-disabled="true"')+'>'+addLabel+'</button></div>'+(p.can_order?'':'<span class="badge">รอเปิดสถานะขายของสาขา</span>')+'</div></article>';
   }).join(''):(query?'<div class="empty">ไม่พบเมนูที่ตรงกับคำค้นหา<br>ลองค้นหาด้วยชื่อเครื่องดื่มหรืออาหารอื่น</div>':'<div class="empty">ยังไม่มีสินค้าในหมวดนี้</div>');
 }
 function openProductOptions(product){
