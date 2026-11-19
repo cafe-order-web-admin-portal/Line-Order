@@ -69,7 +69,7 @@ const db=(cfg.url&&cfg.publishableKey&&window.supabase)?window.supabase.createCl
 let profile=null,allProducts=[],activeCategory='all',cart=new Map();
 let optionGroups=[],optionChoices=[],productGroupLinks=[],productOptionLinks=[],currentProduct=null;
 let activeRequestId=null;
-let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
+let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false, locationHeartbeatTimer=null;
 let lastCustomerOrders=[];
 
 function getLineSession(){try{const s=JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null');if(!s?.idToken||Number(s.expiresAt)<=Date.now()+60000)return null;profile=s.profile||null;return s;}catch(_){return null;}}
@@ -309,7 +309,7 @@ async function startLocationSharing(orderId,consentAlreadyGiven=false,silent=fal
     if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);
     if(activeLocationOrderId&&activeLocationOrderId!==orderId){await postLocation('stop',activeLocationOrderId).catch(()=>{});}
     const result=await postLocation('start',orderId,position);
-    activeLocationOrderId=orderId;lastLocationSentAt=Date.now();lastSentLocation={latitude:position.coords.latitude,longitude:position.coords.longitude};
+    activeLocationOrderId=orderId;lastLocationSentAt=Date.now();lastSentLocation={latitude:position.coords.latitude,longitude:position.coords.longitude};startLocationHeartbeat(orderId);
     locationWatchId=navigator.geolocation.watchPosition(async next=>{
       if(locationSending||activeLocationOrderId!==orderId)return;
       const coords={latitude:next.coords.latitude,longitude:next.coords.longitude};
@@ -326,10 +326,24 @@ async function startLocationSharing(orderId,consentAlreadyGiven=false,silent=fal
     if(!silent)alert('เริ่มแชร์ตำแหน่งให้ร้านแล้วครับ\nพิกัดล่าสุดถูกส่งเรียบร้อย');
   }catch(e){console.warn('Location sharing failed:',e.message||e);if(!silent)alert(e.message||'ไม่สามารถเริ่มแชร์ตำแหน่งได้');}
 }
+function startLocationHeartbeat(orderId){
+ if(locationHeartbeatTimer)clearInterval(locationHeartbeatTimer);
+ locationHeartbeatTimer=setInterval(async()=>{
+  if(document.hidden||activeLocationOrderId!==orderId||locationSending||!navigator.geolocation)return;
+  locationSending=true;
+  try{
+   const pos=await getCurrentPosition();
+   await postLocation('update',orderId,pos);
+   lastLocationSentAt=Date.now();
+   lastSentLocation={latitude:pos.coords.latitude,longitude:pos.coords.longitude};
+  }catch(e){console.info('GPS heartbeat:',e.message);}
+  finally{locationSending=false;}
+ },30000);
+}
 async function stopLocationSharing(orderId){
   try{
     await postLocation('stop',orderId);
-    if(activeLocationOrderId===orderId){if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;activeLocationOrderId=null;lastSentLocation=null;lastLocationSentAt=0;}
+    if(activeLocationOrderId===orderId){if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);if(locationHeartbeatTimer)clearInterval(locationHeartbeatTimer);locationHeartbeatTimer=null;if(locationHeartbeatTimer)clearInterval(locationHeartbeatTimer);locationHeartbeatTimer=null;locationWatchId=null;activeLocationOrderId=null;lastSentLocation=null;lastLocationSentAt=0;}
     const receiptShare=$('receipt').querySelector('[data-receipt-share="'+orderId+'"]');
     if(receiptShare){receiptShare.textContent='📍 แชร์ตำแหน่งของฉันให้ร้าน';receiptShare.disabled=false;}
     await loadMyOrders(false);
