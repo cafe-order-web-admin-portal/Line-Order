@@ -4,7 +4,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = new Set(["https://cafe-order-web-admin-portal.github.io", "https://cafe-amazon-web-admin-portal.github.io"]);
 const LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
-const EXPECTED_LINE_LOGIN_CHANNEL_ID = "2012679988";
 
 function cors(origin: string | null): HeadersInit {
   return {
@@ -63,22 +62,40 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
     const idToken = typeof body?.id_token === "string" ? body.id_token.trim() : "";
+    const liffId = typeof body?.liff_id === "string" ? body.liff_id.trim() : "";
     const limit = Math.max(1, Math.min(20, Number.isInteger(body?.limit) ? body.limit : 10));
     if (!idToken || idToken.length > 12_000) return reply(origin, 400, { error: "line_id_token_required" });
+    if (!/^\\d+-[A-Za-z0-9]+$/.test(liffId)) return reply(origin, 400, { error: "registered_liff_id_required" });
 
-    const claims = await verifyToken(idToken, EXPECTED_LINE_LOGIN_CHANNEL_ID);
     const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    const { data: app, error: appError } = await admin
+      .from("line_liff_apps").select("liff_id,line_login_channel_id")
+      .eq("liff_id", liffId).eq("is_active", true).maybeSingle();
+    if (appError || !app) return reply(origin, 403, { error: "LIFF นี้ยังไม่ได้ผูกกับสาขา" });
+
+    const { data: channel, error: channelError } = await admin
+      .from("line_channels").select("line_login_channel_id,branch_id")
+      .eq("line_login_channel_id", app.line_login_channel_id).eq("is_active", true).maybeSingle();
+    if (channelError || !channel) return reply(origin, 403, { error: "ไม่พบ LINE Channel ที่ใช้งานได้" });
+
+    const { data: branch, error: branchError } = await admin
+      .from("branches").select("id,branch_code,branch_name")
+      .eq("id", channel.branch_id).eq("is_active", true).maybeSingle();
+    if (branchError || !branch) return reply(origin, 403, { error: "สาขาที่ผูกกับ LINE นี้ปิดให้บริการ" });
+
+    const claims = await verifyToken(idToken, channel.line_login_channel_id);
     const { data, error } = await admin.rpc("get_liff_orders", {
       p_line_user_id: claims.sub,
+      p_branch_id: branch.id,
       p_limit: limit,
     });
     if (error) {
       console.error("get_liff_orders failed:", error.code, error.message);
       return reply(origin, 502, { error: "ไม่สามารถโหลดประวัติคำสั่งซื้อได้ในขณะนี้" });
     }
-    return reply(origin, 200, { success: true, orders: Array.isArray(data) ? data : [] });
+    return reply(origin, 200, { success: true, branch: { id: branch.id, branch_code: branch.branch_code, branch_name: branch.branch_name }, orders: Array.isArray(data) ? data : [] });
   } catch (error) {
     console.error("my-orders failed:", error instanceof Error ? error.message : error);
     if (error instanceof Error && error.message.includes("LINE_ID_TOKEN")) return reply(origin, 401, { error: "LINE login หมดอายุ กรุณาเปิดหน้าเว็บสั่งซื้อใหม่" });
