@@ -123,8 +123,6 @@ async function establishLineSession(){
   }
   const idToken=liff.getIDToken();
   if(!idToken)throw new Error('ไม่ได้รับ LINE ID Token กรุณาตรวจสอบ LIFF Scope: openid และ profile');
-  const cached=getLineSession();
-  if(cached&&cached.idToken===idToken)return cached;
   const res=await fetch(LINE_LOGIN_FUNCTION_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
