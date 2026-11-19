@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Café Amazon Tracker",
+    "slug": "cafe-amazon-customer-tracker",
+    "scheme": "cafeamazontracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ใช้ตำแหน่งเพื่อแจ้งร้าน Café Amazon ว่าคุณอยู่ที่ใดระหว่างเดินทางมารับออเดอร์",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "อนุญาตแชร์ตำแหน่งระหว่างเดินทาง แม้แอปอยู่เบื้องหลัง เฉพาะช่วงเวลาที่คุณเปิดแชร์"
+      }
+    },
+    "android": {
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ],
+      "package": "com.cafeamazon.customertracker"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "อนุญาตให้ Café Amazon ใช้ตำแหน่งระหว่างติดตามออเดอร์",
+          "locationAlwaysAndWhenInUsePermission": "อนุญาตแชร์ตำแหน่งระหว่างเดินทางแม้แอปอยู่เบื้องหลัง",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "expo-router"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
