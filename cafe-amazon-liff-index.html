@@ -446,7 +446,9 @@ main>.section-title:first-of-type{margin-top:2px!important}
 }
 
 
-/* Exact uploaded reference header: use the supplied Café Amazon header card as the base artwork. */
+
+/* Leaf-only background layer matching the supplied Café Amazon reference card.
+   Keep the existing HTML logo, branch, refresh action and search field above the background. */
 .menu-header{
   position:relative!important;
   display:block!important;
@@ -461,13 +463,64 @@ main>.section-title:first-of-type{margin-top:2px!important}
   border:0!important;
   border-radius:0 0 18px 18px!important;
   isolation:isolate!important;
-  background-image:url('./assets/cafe-amazon-header-reference.webp?v=1')!important;
+  background-image:url('./assets/cafe-amazon-leaf-bg.webp?v=20261119-2')!important;
   background-position:center center!important;
   background-size:100% 100%!important;
   background-repeat:no-repeat!important;
   box-shadow:0 3px 12px rgba(11,55,34,.10)!important;
 }
-.menu-header .brand-side{display:none!important}
+.menu-header .top{
+  position:absolute!important;
+  inset:0!important;
+  display:block!important;
+}
+.menu-header .brand-side{
+  position:absolute!important;
+  left:15.5%!important;
+  top:14.5%!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:clamp(12px,4vw,28px)!important;
+  width:70%!important;
+  min-width:0!important;
+  z-index:3!important;
+}
+.menu-header .logo{
+  display:grid!important;
+  place-items:center!important;
+  flex:0 0 clamp(42px,11.5vw,72px)!important;
+  width:clamp(42px,11.5vw,72px)!important;
+  height:clamp(42px,11.5vw,72px)!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#fff!important;
+}
+.menu-header .logo svg{display:block!important;width:100%!important;height:100%!important}
+.menu-header .brand-copy{display:block!important;min-width:0!important}
+.menu-header .brand{
+  display:block!important;
+  margin:0!important;
+  color:#fff!important;
+  font:700 clamp(17px,4.5vw,30px)/1.2 'IBM Plex Sans Thai',sans-serif!important;
+  letter-spacing:-.2px!important;
+  text-shadow:0 1px 2px rgba(0,0,0,.12)!important;
+}
+.menu-header .sub{display:none!important}
+.menu-header .branch{
+  display:block!important;
+  margin:4px 0 0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:rgba(255,255,255,.9)!important;
+  font:500 clamp(11px,3vw,18px)/1.25 'IBM Plex Sans Thai',sans-serif!important;
+  white-space:nowrap!important;
+  box-shadow:none!important;
+}
 .menu-header .header-refresh{
   position:absolute!important;
   top:29%!important;
@@ -480,18 +533,30 @@ main>.section-title:first-of-type{margin-top:2px!important}
   border-radius:50%!important;
   background:transparent!important;
   box-shadow:none!important;
-  color:transparent!important;
+  color:#fff!important;
+  display:grid!important;
+  place-items:center!important;
   z-index:3!important;
 }
-.menu-header .header-refresh svg{opacity:0!important;width:100%!important;height:100%!important}
+.menu-header .header-refresh svg{
+  display:block!important;
+  opacity:1!important;
+  width:56%!important;
+  height:70%!important;
+  fill:none!important;
+  stroke:currentColor!important;
+  stroke-width:2.1!important;
+  stroke-linecap:round!important;
+  stroke-linejoin:round!important;
+}
 .menu-header .menu-search{
   position:absolute!important;
   left:4.1%!important;
-  top:54.1%!important;
+  top:66.2%!important;
   width:91.8%!important;
-  height:26.7%!important;
+  height:31.2%!important;
   margin:0!important;
-  padding:0 4.5% 0 12.2%!important;
+  padding:0 4.5% 0 15%!important;
   display:flex!important;
   align-items:center!important;
   gap:7px!important;
@@ -500,15 +565,16 @@ main>.section-title:first-of-type{margin-top:2px!important}
   background:#fff!important;
   color:#28352d!important;
   box-shadow:0 1px 2px rgba(0,0,0,.04)!important;
-  z-index:2!important;
+  z-index:4!important;
 }
 .menu-header .menu-search .search-icon{display:none!important}
 .menu-header .menu-search .search-icon-svg{
   position:absolute!important;
-  left:4.3%!important;
+  left:5.4%!important;
   top:50%!important;
   transform:translateY(-50%)!important;
-  width:19px!important;height:19px!important;
+  width:clamp(17px,4.5vw,27px)!important;
+  height:clamp(17px,4.5vw,27px)!important;
   display:block!important;
   color:#222!important;
   fill:none!important;
@@ -525,12 +591,19 @@ main>.section-title:first-of-type{margin-top:2px!important}
   outline:0!important;
   background:transparent!important;
   color:#303630!important;
-  font:500 clamp(10px,3vw,13px)/1.2 'IBM Plex Sans Thai',sans-serif!important;
+  font:500 clamp(11px,3vw,16px)/1.2 'IBM Plex Sans Thai',sans-serif!important;
   box-shadow:none!important;
 }
 .menu-header .menu-search input::placeholder{color:#68706a!important;opacity:1!important}
 @media(min-width:560px){
   .menu-header{max-width:760px!important;border-radius:0 0 20px 20px!important}
+}
+@media(max-width:380px){
+  .menu-header .brand-side{left:14.8%!important;gap:10px!important}
+  .menu-header .logo{flex-basis:40px!important;width:40px!important;height:40px!important}
+  .menu-header .brand{font-size:16px!important}
+  .menu-header .branch{font-size:10px!important}
+  .menu-header .menu-search{padding-left:15.5%!important}
 }
 
 </style>
