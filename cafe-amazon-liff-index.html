@@ -58,7 +58,15 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 const LINE_LIFF_ID='2012679988-ORHhLD7I';
 const LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login';
 const LINE_SESSION_KEY='ca_line_liff_session_v1';
+const EXTERNAL_RETURN_KEY='ca_external_order_return_v1';
 const BRANCH_CODE='PKT001';
+// Save the destination across LINE Login without adding query parameters to
+// the OAuth redirect_uri, which can trigger LINE's 400 Bad Request page.
+(function preserveExternalReturn(){
+ const value=new URLSearchParams(location.search).get('return');
+ if(!value)return;
+ try{const u=new URL(value);if(u.origin===location.origin&&u.pathname.endsWith('/web-order.html'))sessionStorage.setItem(EXTERNAL_RETURN_KEY,u.href);}catch(_){}
+})();
 const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
 const TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders';
 const LOCATION_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/share-customer-location';
@@ -81,7 +89,7 @@ async function establishLineSession(){
   await liffInitPromise;
   if(!liff.isLoggedIn()){
     if(!liff.isInClient()){
-      liff.login({redirectUri:location.href});
+      liff.login({redirectUri:location.origin+location.pathname});
       return null;
     }
     throw new Error('ไม่สามารถยืนยันบัญชี LINE ในแอปได้ กรุณาปิดแล้วเปิดจาก Rich Menu อีกครั้ง');
@@ -125,8 +133,9 @@ async function start(){
  if(!db){setStatus('ไม่พบการตั้งค่า Supabase — ตรวจสอบ assets/config.js');$('products').innerHTML='<div class="empty">ยังเชื่อมต่อฐานข้อมูลไม่ได้</div>';return;}
  try{setStatus('กำลังเข้าสู่ระบบ LINE…');const session=await establishLineSession();if(!session)return;if(profile?.displayName)$('customer-name').value=profile.displayName;}
  catch(e){console.error('LINE Login:',e);setStatus(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ');$('products').innerHTML='<div class="empty">'+esc(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ')+'<br><button class="primary" style="margin-top:12px" onclick="location.reload()">ลองอีกครั้ง</button></div>';return;}
- const returnParam=new URLSearchParams(location.search).get('return');
+ const returnParam=sessionStorage.getItem(EXTERNAL_RETURN_KEY);
  if(returnParam){
+  sessionStorage.removeItem(EXTERNAL_RETURN_KEY);
   try{const target=new URL(returnParam);if(target.origin===location.origin&&target.pathname.endsWith('/web-order.html')){location.replace(target.href);return;}}
   catch(error){console.warn('Invalid external return URL:',error);}
  }
