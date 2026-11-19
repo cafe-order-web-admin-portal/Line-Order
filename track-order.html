@@ -52,7 +52,7 @@ async function getToken(){
  }
  const lineIdToken=liff.getIDToken();
  if(!lineIdToken)throw new Error('ไม่ได้รับ LINE ID Token กรุณาตรวจสอบ LIFF Scope openid และ profile');
- const res=await fetch(LINE_LOGIN_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:lineIdToken})});
+ const res=await fetch(LINE_LOGIN_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:lineIdToken,liff_id:LINE_LIFF_ID})});
  const data=await res.json().catch(()=>({}));
  if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ยืนยันตัวตน LINE ไม่สำเร็จ');
  const session={idToken:data.id_token,expiresAt:Number(data.id_token_expires_at)||Date.now()+3600000,profile:data.profile||null};
@@ -63,7 +63,7 @@ async function getToken(){
 // GPS จะทำงานต่อเมื่อผู้ใช้เคยยินยอมแชร์ตำแหน่งสำหรับออเดอร์นี้แล้ว
 async function sendLocation(action,orderId,position=null){
  const coords=position?.coords;
- const res=await fetch(LOCATION_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,order_id:orderId,action,latitude:coords?.latitude,longitude:coords?.longitude,accuracy_m:coords?.accuracy})});
+ const res=await fetch(LOCATION_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,liff_id:LINE_LIFF_ID,order_id:orderId,action,latitude:coords?.latitude,longitude:coords?.longitude,accuracy_m:coords?.accuracy})});
  const data=await res.json().catch(()=>({}));
  if(!res.ok||data.success!==true)throw new Error(data.error||'ส่งตำแหน่งไม่สำเร็จ');
  return data;
@@ -120,7 +120,7 @@ async function loadOrders(){
  if(loading)return;loading=true;$('message').textContent='กำลังโหลดสถานะคำสั่งซื้อ…';
  try{
   if(!idToken){idToken=await getToken();if(!idToken)return;}
-  const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,limit:10})});
+  const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,liff_id:LINE_LIFF_ID,limit:10})});
   const data=await res.json().catch(()=>({}));
   if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดคำสั่งซื้อได้');
   const orders=data.orders||[];$('orders').innerHTML=orders.length?orders.map(renderOrder).join(''):'<div class="empty">ยังไม่พบคำสั่งซื้อของคุณ</div>';resumeLocationSharing(orders);
