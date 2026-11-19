@@ -340,7 +340,7 @@ function renderProducts(){
     const code=String(p.product_code||'');
     const isFood=code.startsWith('CA-BAK')&&!/(น้ำ|เครื่องดื่ม)/.test(String(p.product_name||''));
     const photoClass=isFood?'photo-food':'photo-drink';
-    return '<article class="card"><div class="photo '+photoClass+'">'+(isFood?'<span class="photo-plate" aria-hidden="true"></span>':'')+(p.image_url?'<img loading="lazy" class="'+(/\\.(png|webp|avif)(?:\\?|$)/i.test(p.image_url)?'photo-cutout':'photo-photo')+'" src="'+esc(p.image_url)+'" alt="'+esc(p.product_name)+'">':'<span class="photo-fallback" aria-hidden="true">☕</span>')+'</div><div class="info"><div class="name">'+esc(p.product_name)+'</div><div class="row"><span class="price">'+(p.price>0?money(p.price):'รอระบุราคา')+'</span><button class="add" data-add="'+esc(p.id)+'" '+(p.can_order?'':'disabled')+'>'+(p.can_order?'+ เพิ่ม':'ยังไม่เปิดขาย')+'</button></div>'+(p.can_order?'':'<span class="badge">รอเปิดสถานะขายของสาขา</span>')+'</div></article>';
+    return '<article class="card"><div class="photo '+photoClass+'">'+(isFood?'<span class="photo-plate" aria-hidden="true"></span>':'')+(p.image_url?'<img loading="lazy" class="'+(/\.(png|webp|avif)(?:\?|$)/i.test(p.image_url)?'photo-cutout':'photo-photo')+'" src="'+esc(p.image_url)+'" alt="'+esc(p.product_name)+'">':'<span class="photo-fallback" aria-hidden="true">☕</span>')+'</div><div class="info"><div class="name">'+esc(p.product_name)+'</div><div class="row"><span class="price">'+(p.price>0?money(p.price):'รอระบุราคา')+'</span><button class="add" data-add="'+esc(p.id)+'" '+(p.can_order?'':'disabled')+'>'+(p.can_order?'+ เพิ่ม':'ยังไม่เปิดขาย')+'</button></div>'+(p.can_order?'':'<span class="badge">รอเปิดสถานะขายของสาขา</span>')+'</div></article>';
   }).join(''):(query?'<div class="empty">ไม่พบเมนูที่ตรงกับคำค้นหา<br>ลองค้นหาด้วยชื่อเครื่องดื่มหรืออาหารอื่น</div>':'<div class="empty">ยังไม่มีสินค้าในหมวดนี้</div>');
 }
 function openProductOptions(product){
@@ -542,7 +542,7 @@ setInterval(()=>{if(!document.hidden&&getLineIdToken())loadMyOrders();},30000);
   try{
     const response=await fetch('./assets/cafe-menu-scene.jpg.b64',{cache:'force-cache'});
     if(!response.ok)throw new Error('scene asset unavailable: '+response.status);
-    const encoded=(await response.text()).replace(/\\s/g,'');
+    const encoded=(await response.text()).replace(/\s/g,'');
     if(!encoded.startsWith('/9j/'))throw new Error('scene asset is incomplete');
     document.documentElement.style.setProperty('--menu-scene-image','url("data:image/jpeg;base64,'+encoded+'")');
   }catch(error){console.warn('Café menu scene fallback:',error);}
