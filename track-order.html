@@ -40,11 +40,7 @@ let idToken=null,loading=false;
 async function getToken(){
  const cached=(()=>{try{return JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null')}catch(_){return null}})();
  if(cached?.idToken&&Number(cached.expiresAt)>Date.now()+60000)return cached.idToken;
- // Authenticate through the registered LIFF endpoint, then return to this page.
- const returnUrl=new URL(location.href);
- if(returnUrl.origin!==location.origin||returnUrl.pathname!==location.pathname)throw new Error('ลิงก์ติดตามคำสั่งซื้อไม่ถูกต้อง');
- location.replace('https://liff.line.me/'+LINE_LIFF_ID+'?return='+encodeURIComponent(returnUrl.href));
- return null;
+ throw new Error('ไม่พบเซสชัน LINE กรุณาเปิดหน้าติดตามจาก Rich Menu อีกครั้ง');
 }
 function renderOrder(o){
  const st=statusInfo[o.order_status]||{label:o.order_status||'ไม่ทราบสถานะ',icon:'ℹ️',step:0};
