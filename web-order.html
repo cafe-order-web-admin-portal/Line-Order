@@ -827,31 +827,25 @@ main{
 }
 
 
-/* Card edge refinement: full-bleed top, square upper corners, softly rounded lower corners. */
-.card{
-  border-radius:0 0 16px 16px!important;
-  overflow:hidden!important;
-}
-.card .photo{
-  width:100%!important;
-  box-sizing:border-box!important;
-  padding:0!important;
-  margin:0!important;
+/* Header-only correction requested: full-bleed leafy panel, square top, rounded bottom.
+   The product cards below are intentionally restored to their pre-edge-refinement layout. */
+.menu-header::before{
+  left:0!important;
+  right:0!important;
+  top:0!important;
+  height:56.7%!important;
   border:0!important;
-  border-radius:0!important;
-  background-color:#e5e8df!important;
-  background-image:var(--menu-scene-image),linear-gradient(180deg,#d8e3d4 0%,#e8ecdf 56%,#b68a63 57%,#d2ad87 100%)!important;
-  background-size:cover,cover!important;
-  background-position:center 62%,center!important;
-  background-repeat:no-repeat!important;
+  border-bottom:2px solid rgba(219,239,224,.48)!important;
+  border-radius:0 0 18px 18px!important;
+  background:
+    linear-gradient(90deg,rgba(3,58,39,.28),rgba(2,58,38,.15)),
+    url('./assets/cafe-amazon-leaf-bg.webp?v=20261119-2') left center/cover no-repeat!important;
 }
-.card .photo img,
-.card .photo img.photo-cutout,
-.card .photo img.photo-photo{
+.menu-header{
   width:100%!important;
-  height:100%!important;
-  object-fit:contain!important;
-  object-position:center center!important;
+  max-width:none!important;
+  margin:0!important;
+  border-radius:0!important;
 }
 
 </style>
