@@ -2,6 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>try{if(window.self!==window.top)document.documentElement.classList.add("cms-owner-embedded");}catch(_){document.documentElement.classList.add("cms-owner-embedded");}</script>
 <meta name="theme-color" content="#075b39"><title>Café Amazon | Store Operation Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script><script src="./assets/config.js"></script><script src="./assets/sso.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -312,6 +313,43 @@
     max-height:min(65svh,600px)!important;
     margin-bottom:8px;
   }
+}
+
+
+/* CMS Owner embedded layout fix:
+   The iframe viewport is desktop-wide, but the LIVE order queue panel is only one grid column.
+   Do not split its order cards into two tiny columns; keep item names, options and totals readable.
+   Standalone LIVE Orders layout remains unchanged. */
+html.cms-owner-embedded .queue-list{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  align-content:start!important;
+}
+html.cms-owner-embedded .queue-list>.live-order-card{
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+}
+html.cms-owner-embedded .live-order-card .order-products-list{
+  grid-template-columns:minmax(0,1fr)!important;
+}
+html.cms-owner-embedded .live-order-card .order-product-row{
+  grid-template-columns:38px minmax(0,1fr) auto auto!important;
+  gap:7px!important;
+}
+html.cms-owner-embedded .live-order-card .order-product-copy{
+  min-width:0!important;
+}
+html.cms-owner-embedded .live-order-card .order-product-name{
+  white-space:normal!important;
+  word-break:normal!important;
+  overflow-wrap:break-word!important;
+  line-height:1.35!important;
+}
+html.cms-owner-embedded .live-order-card .order-product-options{
+  white-space:normal!important;
+  overflow-wrap:break-word!important;
+  word-break:normal!important;
 }
 
 </style>
