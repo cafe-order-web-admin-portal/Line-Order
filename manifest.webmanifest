@@ -1,0 +1,10 @@
+{
+  "name": "Café Amazon Store Orders",
+  "short_name": "CA Orders",
+  "start_url": "./orders.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f4",
+  "theme_color": "#075b39",
+  "icons": []
+}
