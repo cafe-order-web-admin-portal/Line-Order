@@ -1,49 +1,50 @@
 # LINE LIFF customer login setup
 
-The customer storefront uses the existing LINE Login channel **2012679988** and its existing LIFF app ID **2012679988-ORHhLD7I**. Do not create a new channel or LIFF app.
+The customer order pages are multi-branch. Customers do not select a branch. Each branch is opened from its own LIFF URL, and the backend maps the LIFF app to its registered LINE Login Channel and branch.
 
-## LINE Developers Console
+## Existing B0001 branch
 
-In the existing LINE Login channel:
+- Branch: `B0001` — สาขาตลาดทวีสมาน
+- LINE Login Channel ID: `2012679988`
+- LIFF ID: `2012679988-ORHhLD7I`
 
-1. Open the **LIFF** tab and confirm the existing LIFF app ID is `2012679988-ORHhLD7I`.
-2. Set the LIFF app Endpoint URL to the exact customer storefront page:
-   `https://cafe-order-web-admin-portal.github.io/Line-Order/cafe-amazon-liff-index.html`
-3. Enable the `openid` and `profile` scopes.
-4. Confirm the LIFF app is active.
+The existing LIFF app remains active. Its endpoint can continue using the existing default LIFF ID. The registry row was added to `public.line_channels` and `public.line_liff_apps`.
 
-## LINE Official Account Rich Menu
+## Adding a branch
 
-Set the order button's URI action to the LIFF URL:
+Follow `MULTI_BRANCH_LINE_SETUP.md` and `ADD_NEW_BRANCH_LINE_CHANNEL.sql`.
 
-`https://liff.line.me/2012679988-ORHhLD7I`
+Important: a LINE ID token's `aud` claim identifies the LINE Login Channel ID, not an individual LIFF app. A single LINE Login Channel can host multiple LIFF apps for the same branch, but cannot securely distinguish two different branches. Use a separate LINE Login Channel ID for each branch.
 
-Do not point the Rich Menu directly to the GitHub Pages URL or to the old OAuth authorization page. The LIFF URL is what launches the LIFF app in LINE.
+## LIFF endpoint configuration
 
-## Supabase
+For each new LIFF app, set the Endpoint URL to:
 
-The `line-login` Edge Function verifies the ID token issued by LIFF against LINE's verify endpoint using channel ID `2012679988`, then creates or updates the matching `customers` row. It uses the existing server-side `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` secrets.
+`https://cafe-order-web-admin-portal.github.io/Line-Order/cafe-amazon-liff-index.html?liff_id=YOUR_LIFF_ID`
 
-The old OAuth-only secrets `LINE_LOGIN_CHANNEL_SECRET` and `LINE_LOGIN_REDIRECT_URI` are no longer required by the LIFF flow. They may remain in Supabase Secrets; the function does not read them.
+Enable the `openid` and `profile` scopes and confirm the LIFF app is active.
 
-## Customer login flow
+## Customer entry links
 
-1. Customer taps the Rich Menu order action.
-2. LINE opens `https://liff.line.me/2012679988-ORHhLD7I`.
-3. LIFF SDK initializes in the customer page.
-4. In a LIFF browser, LINE provides the logged-in user's LIFF session. No separate email/password login page is shown.
-5. The browser sends the LIFF ID token to the `line-login` Edge Function.
-6. The Edge Function verifies the token with LINE and creates/updates `customers` without overwriting the customer's phone number.
-7. The storefront loads the menu and existing ordering/tracking features.
+Rich Menu order action:
 
-The app requests `openid` and `profile`. The server verifies the ID token; it does not trust a user ID or profile object supplied separately by the browser.
+`https://liff.line.me/YOUR_LIFF_ID`
 
-## Testing
+Direct website order link:
 
-Test by opening the LIFF URL from the actual LINE Official Account Rich Menu on iOS and Android. Confirm:
-- It opens in LINE's LIFF browser.
-- It does not show the separate LINE email/password OAuth page.
-- Customer identity is verified and the customer row is created/updated.
-- Menu, checkout, order tracking, and optional location sharing continue to work.
+`https://cafe-order-web-admin-portal.github.io/Line-Order/web-order.html?liff_id=YOUR_LIFF_ID`
 
-If a customer opens the GitHub Pages URL directly in Safari/Chrome, behavior may differ from opening the LIFF URL inside LINE.
+The same shared storefront and website code is used by all branches. The LIFF ID selects the registered branch configuration; there is no branch-selection UI.
+
+## Authentication and security
+
+The customer LIFF page obtains the raw ID token from `liff.getIDToken()` and posts it with the LIFF ID to the `line-login` Edge Function. The function:
+1. Finds the registered LIFF app.
+2. Resolves its LINE Login Channel and active branch.
+3. Verifies the token with LINE against the mapped channel ID.
+4. Creates or updates the customer's record.
+5. Returns the server-resolved branch ID, branch code and branch name for menu display.
+
+Checkout, order history and location-sharing functions repeat the server-side LIFF/channel/branch resolution. Customer-submitted branch codes are not accepted as the source of truth.
+
+The current ID-token flow does not exchange an authorization code and does not require a LINE Login channel secret. Messaging API channel secrets and access tokens are separate credentials; new branches store them in Supabase Vault using the SQL setup template.
