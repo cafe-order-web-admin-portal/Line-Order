@@ -65,7 +65,11 @@ const BRANCH_CODE='PKT001';
 (function preserveExternalReturn(){
  const value=new URLSearchParams(location.search).get('return');
  if(!value)return;
- try{const u=new URL(value);if(u.origin===location.origin&&u.pathname.endsWith('/web-order.html'))sessionStorage.setItem(EXTERNAL_RETURN_KEY,u.href);}catch(_){}
+ try{
+  const u=new URL(value);
+  const allowed=u.origin===location.origin && ['/web-order.html','/track-order.html'].includes(u.pathname);
+  if(allowed)sessionStorage.setItem(EXTERNAL_RETURN_KEY,u.href);
+ }catch(_){}
 })();
 const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
 const TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders';
