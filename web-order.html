@@ -78,12 +78,12 @@ let liffInitPromise=null;
 async function establishLineSession(){
   if(!window.liff)throw new Error('โหลด LINE LIFF SDK ไม่สำเร็จ กรุณาปิดหน้าแล้วเปิดจาก Rich Menu อีกครั้ง');
   if(!liffInitPromise){
-    liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID});
+    liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
   }
   await liffInitPromise;
   if(!liff.isLoggedIn()){
     if(!liff.isInClient()){
-      liff.login({redirectUri:REGISTERED_LIFF_ENDPOINT});
+      liff.login();
       return null;
     }
     throw new Error('ไม่สามารถยืนยันบัญชี LINE ในแอปได้ กรุณาปิดแล้วเปิดจาก Rich Menu อีกครั้ง');
