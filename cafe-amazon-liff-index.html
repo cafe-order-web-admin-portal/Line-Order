@@ -1107,7 +1107,7 @@ async function loadMenu(){
   const links=linkRes.data||[],ids=[...new Set(links.map(x=>x.product_id).filter(Boolean))];
   renderCategories(catRes.data||[]);
   if(!ids.length){allProducts=[];renderProducts();setStatus('พบสาขา '+branch.branch_name+' แต่ยังไม่มีสินค้าใน branch_products');return;}
-  const productRes=await db.from('products').select('id,category_id,product_code,product_name,description,image_url,is_active,is_featured,display_order').in('id',ids).order('display_order',{ascending:true});
+  const productRes=await db.from('products').select('id,category_id,product_code,product_name,description,image_url,is_active,is_featured,display_order').in('id',ids).eq('is_active',true).order('display_order',{ascending:true});
   if(productRes.error){setStatus('อ่านสินค้าไม่สำเร็จ: '+productRes.error.message);$('products').innerHTML='<div class="empty">โหลดสินค้าไม่สำเร็จ</div>';return;}
   const priceMap=new Map(links.map(x=>[String(x.product_id),x]));
   allProducts=(productRes.data||[]).map(p=>{const bp=priceMap.get(String(p.id))||{};const price=Number(bp.price??0);return {...p,price,is_available:bp.is_available===true,can_order:p.is_active===true&&bp.is_available===true&&price>0};});
