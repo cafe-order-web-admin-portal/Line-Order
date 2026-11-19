@@ -304,7 +304,7 @@ async function start(){
  await loadMenu();
  // LINE's in-app browser can restore a previous scroll offset. Always reopen at the menu header.
  window.history.scrollRestoration='manual';
- requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'instant'}));
+ requestAnimationFrame(()=>window.scrollTo(0,0));
 }
 const LOCATION_ONBOARDING_KEY='ca_location_onboarding_v1';
 function locationConsentKey(){return LOCATION_ONBOARDING_KEY+':'+(profile?.userId||'anonymous');}
