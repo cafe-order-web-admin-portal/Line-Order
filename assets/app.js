@@ -22,7 +22,7 @@
   };
   const state = {
     db:null, session:null, user:null, staff:null, branches:[], categories:[],
-    products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:'dashboard', selectedOptionProduct:'', customerSearch:'',
+    products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:(['dashboard','products','categories','options','import','history','customers'].includes(location.hash.slice(1))?location.hash.slice(1):'dashboard'), selectedOptionProduct:'', customerSearch:'',
     search:'', categoryFilter:'', importRows:[], importFileName:'', importErrors:[],
     busy:false
   };
@@ -119,9 +119,33 @@
   function navButton(key,label,ico) {
     return `<button data-page="${key}" class="${state.page===key?'active':''}"><span class="ico">${ico}</span>${label}</button>`;
   }
+  function mobileIcon(name) {
+    const paths = {
+      home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+      products:'<path d="M7 3h10l-1 4H8L7 3Z"/><path d="M6 7h12l2 14H4L6 7Z"/><path d="M9 11h6"/>',
+      orders:'<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3h2l2.2 12.2a2 2 0 0 0 2 1.6h9a2 2 0 0 0 1.9-1.4L22 8H6"/>',
+      upload:'<path d="M12 16V3m-5 5 5-5 5 5"/><path d="M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/>',
+      more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+      categories:'<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+      options:'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
+      history:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      customers:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20v-1.5A5.5 5.5 0 0 1 8.5 13h1A5.5 5.5 0 0 1 15 18.5V20"/><path d="M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4.5V20"/>'
+    };
+    return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name]||paths.more}</svg>`;
+  }
+  function mobileNavButton(key,label,ico) {
+    return `<button type="button" data-page="${key}" class="${state.page===key?'active':''}" ${state.page===key?'aria-current="page"':''}>${mobileIcon(ico)}<span>${label}</span></button>`;
+  }
   function renderApp() {
     const who=state.staff?.staff_name||state.user?.email||'';
     const roleLabel={super_admin:'Super Admin',manager:'Manager',staff:'Staff'}[state.staff?.role]||state.staff?.role;
+    const morePages = [];
+    if(isSuper()) morePages.push(['categories','หมวดหมู่','categories'],['options','ตัวเลือกสินค้า','options']);
+    if(state.staff?.role !== 'staff') morePages.push(['history','ประวัติ Import','history'],['customers','ข้อมูลลูกค้า','customers']);
+    const moreActive = ['categories','options','history','customers'].includes(state.page);
+    const mobileMore = morePages.length
+      ? morePages.map(([key,label,ico])=>`<button type="button" data-page="${key}">${mobileIcon(ico)}<span>${label}</span></button>`).join('')
+      : '<div class="mobile-more-empty">ไม่มีเมนูเพิ่มเติมสำหรับบัญชีนี้</div>';
     $('#app').innerHTML=`
       <div class="app-shell">
         <aside class="sidebar">
@@ -142,7 +166,7 @@
           <header class="topbar">
             <div class="top-left"><div><div class="top-title">${esc(pageTitle())}</div><div class="top-sub">${esc(activeBranch()?.branch_name||'เลือกสาขา')}</div></div></div>
             <div class="top-actions">
-              ${isSuper()?`<select id="branch-select" class="select-small">${state.branches.map(b=>`<option value="${b.id}" ${b.id===state.branchId?'selected':''}>${esc(b.branch_code)} · ${esc(b.branch_name)}</option>`).join('')}</select>`:''}
+              ${isSuper()?'<select id="branch-select" class="select-small">'+state.branches.map(b=>'<option value="'+b.id+'" '+(b.id===state.branchId?'selected':'')+'>'+esc(b.branch_code)+' · '+esc(b.branch_name)+'</option>').join('')+'</select>':''}
               <div class="user-chip"><b>${esc(who)}</b><br>${esc(roleLabel)}</div>
               <button class="btn" id="refresh-btn">↻</button>
               <button class="btn" id="logout-btn">ออกจากระบบ</button>
@@ -150,8 +174,26 @@
           </header>
           <section class="content" id="page-content">${renderPage()}</section>
         </main>
-      </div>`;
-    document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{state.page=b.dataset.page;renderApp();});
+      </div>
+      <div class="mobile-more-menu" id="mobile-more-menu" hidden>${mobileMore}</div>
+      <nav class="mobile-bottom-nav portal-mobile-nav" aria-label="เมนูหลัก">
+        ${mobileNavButton('dashboard','หน้าหลัก','home')}
+        ${mobileNavButton('products','สินค้า','products')}
+        ${state.staff?.role !== 'super_admin' ? `<a class="nav-live" href="./orders.html" aria-label="LIVE ORDERS">${mobileIcon('orders')}<span>ออเดอร์</span></a>` : ''}
+        ${state.staff?.role !== 'staff' ? mobileNavButton('import','Import','upload') : ''}
+        <button type="button" id="mobile-more-toggle" class="${moreActive?'active':''}" aria-expanded="false">${mobileIcon('more')}<span>เพิ่มเติม</span></button>
+      </nav>`;
+    document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{
+      state.page=b.dataset.page;
+      history.replaceState(null,'',location.pathname+location.search+'#'+state.page);
+      renderApp();
+    });
+    const moreToggle=$('#mobile-more-toggle'), moreMenu=$('#mobile-more-menu');
+    if(moreToggle&&moreMenu) moreToggle.onclick=()=>{
+      const open=moreMenu.hidden;
+      moreMenu.hidden=!open;
+      moreToggle.setAttribute('aria-expanded',String(open));
+    };
     if($('#branch-select')) $('#branch-select').onchange=e=>{state.branchId=e.target.value;renderApp();};
     $('#logout-btn').onclick=logout;
     $('#refresh-btn').onclick=async()=>{try{await reloadData();renderApp();toast('โหลดข้อมูลล่าสุดแล้ว')}catch(e){toast(e.message)}};
@@ -382,7 +424,7 @@
     if($('#customer-search')) $('#customer-search').oninput=e=>{state.customerSearch=e.target.value;const pos=e.target.selectionStart;renderApp();const n=$('#customer-search');n.focus();n.setSelectionRange(pos,pos);};
     document.querySelectorAll('[data-open-chat]').forEach(b=>b.onclick=()=>{state.selectedChatUserId=b.dataset.openChat;renderApp();});
     if($('#close-chat')) $('#close-chat').onclick=()=>{state.selectedChatUserId='';renderApp();};
-    document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{state.page=b.dataset.goto;renderApp();});
+    document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{state.page=b.dataset.goto;history.replaceState(null,'',location.pathname+location.search+'#'+state.page);renderApp();});
     if($('#product-search')) $('#product-search').oninput=e=>{state.search=e.target.value;const pos=e.target.selectionStart;renderApp();const n=$('#product-search');n.focus();n.setSelectionRange(pos,pos);};
     if($('#category-filter')) $('#category-filter').onchange=e=>{state.categoryFilter=e.target.value;renderApp();};
     document.querySelectorAll('[data-edit-price]').forEach(b=>b.onclick=()=>openPrice(b.dataset.editPrice));
