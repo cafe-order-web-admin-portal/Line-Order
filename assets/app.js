@@ -253,7 +253,7 @@
         <td class="money">${bp?money(bp.price):'—'}</td>
         <td>${p.is_active?'<span class="badge ok">Active</span>':'<span class="badge warn">Draft</span>'}</td>
         <td>${bp?.is_available?'<span class="badge ok">เปิดขาย</span>':'<span class="badge bad">ปิดขาย</span>'}</td>
-        <td><div class="actions">${isSuper()?`<button class="btn" data-edit-product="${p.id}">แก้สินค้า</button>`:''}${state.staff?.role!=='staff'?`<button class="btn" data-edit-price="${p.id}">ราคา / เปิดขาย</button>`:''}</div></td>
+        <td><div class="actions">${isSuper()?`<button class="btn" data-edit-product="${p.id}">แก้สินค้า</button><button class="btn ${p.is_active?'danger':'primary'}" data-toggle-product="${p.id}" data-next-active="${p.is_active?'false':'true'}">${p.is_active?'ซ่อนจากเมนู':'เปิดใช้เมนู'}</button>`:''}${state.staff?.role!=='staff'?`<button class="btn" data-edit-price="${p.id}">ราคา / เปิดขาย</button>`:''}</div></td>
       </tr>`).join('')||'<tr><td colspan="6"><div class="empty-state">ไม่พบสินค้า</div></td></tr>'}
       </tbody></table></div></div>`;
   }
@@ -429,6 +429,7 @@
     if($('#category-filter')) $('#category-filter').onchange=e=>{state.categoryFilter=e.target.value;renderApp();};
     document.querySelectorAll('[data-edit-price]').forEach(b=>b.onclick=()=>openPrice(b.dataset.editPrice));
     document.querySelectorAll('[data-edit-product]').forEach(b=>b.onclick=()=>openProduct(b.dataset.editProduct));
+    document.querySelectorAll('[data-toggle-product]').forEach(b=>b.onclick=()=>setProductMenuState(b.dataset.toggleProduct,b.dataset.nextActive==='true'));
     if($('[data-add-product]')) $('[data-add-product]').onclick=()=>openProduct();
     if($('[data-add-category]')) $('[data-add-category]').onclick=()=>openCategory();
     if($('[data-add-group]')) $('[data-add-group]').onclick=()=>openOptionGroup();
@@ -479,6 +480,20 @@
         $('.modal-bg').remove();await reloadData();renderApp();toast('บันทึกราคาสาขาแล้ว');
       }catch(e){btn.disabled=false;btn.textContent='บันทึก';toast(e.message);}
     };
+  }
+
+  async function setProductMenuState(productId, nextActive){
+    if(!isSuper())return;
+    const p=state.products.find(x=>x.id===productId);if(!p)return;
+    const action=nextActive?'เปิดใช้เมนู':'ซ่อนเมนู';
+    const detail=nextActive?'สินค้าแสดงกลับในระบบ แต่สถานะขายของแต่ละสาขายังคงปิดอยู่ ต้องเปิดขายแยกตามสาขา':'สินค้าจะหายจากหน้าสั่งซื้อ LINE ทุกสาขา โดยเก็บข้อมูลสินค้าและประวัติออเดอร์เดิมไว้';
+    if(!window.confirm(action+' “'+p.product_name+'” ใช่หรือไม่?\n\n'+detail))return;
+    try{
+      if(!nextActive){const {error:branchError}=await state.db.from('branch_products').update({is_available:false}).eq('product_id',productId);if(branchError)throw branchError;}
+      const {error}=await state.db.from('products').update({is_active:nextActive}).eq('id',productId);if(error)throw error;
+      await reloadData();renderApp();
+      toast(nextActive?'เปิดใช้เมนูแล้ว — กรุณาตรวจสอบสถานะขายของแต่ละสาขา':'ซ่อนเมนูจากหน้าสั่งซื้อทุกสาขาแล้ว');
+    }catch(e){toast('ดำเนินการไม่สำเร็จ: '+e.message);}
   }
 
   function openProduct(productId){
