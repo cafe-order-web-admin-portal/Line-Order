@@ -77,7 +77,7 @@ let liffInitPromise=null;
 async function establishLineSession(){
   if(!window.liff)throw new Error('โหลด LINE LIFF SDK ไม่สำเร็จ กรุณาปิดหน้าแล้วเปิดจาก Rich Menu อีกครั้ง');
   if(!liffInitPromise){
-    liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
+    liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID});
   }
   await liffInitPromise;
   if(!liff.isLoggedIn()){
@@ -124,10 +124,20 @@ function optionDelta(ids){return selectedOptions(ids).reduce((sum,o)=>sum+Number
 function cartLineUnitPrice(line){return Number(line.product.price)+optionDelta(line.optionIds)}
 async function start(){
  if(!db){setStatus('ไม่พบการตั้งค่า Supabase — ตรวจสอบ assets/config.js');$('products').innerHTML='<div class="empty">ยังเชื่อมต่อฐานข้อมูลไม่ได้</div>';return;}
- try{setStatus('กำลังเข้าสู่ระบบ LINE…');const session=await establishLineSession();if(!session)return;if(profile?.displayName)$('customer-name').value=profile.displayName;}
- catch(e){console.error('LINE Login:',e);setStatus(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ');$('products').innerHTML='<div class="empty">'+esc(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ')+'<br><button class="primary" style="margin-top:12px" onclick="location.reload()">ลองอีกครั้ง</button></div>';return;}
- await requestLocationOnFirstLogin();
- await loadMenu();
+ try{
+  if(!window.liff)throw new Error('โหลด LINE LIFF SDK ไม่สำเร็จ');
+  if(!liffInitPromise)liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID});
+  await liffInitPromise;
+  if(!liff.isLoggedIn()&&!liff.isInClient()){
+    setStatus('กรุณาเข้าสู่ระบบด้วย LINE');
+    $('products').innerHTML='<div class="empty"><div style="font-size:18px;font-weight:700;margin-bottom:10px">ยืนยันตัวตนผ่านแอป LINE</div><p style="color:#756f66;margin-bottom:18px">กดปุ่มด้านล่างเพื่อดำเนินการเข้าสู่ระบบ LINE แล้วกลับมาหน้าเว็บไซต์นี้</p><button class="primary" id="line-login-button" style="width:100%">เข้าสู่ระบบด้วย LINE</button></div>';
+    $('line-login-button').onclick=()=>{try{liff.login({redirectUri:location.href});}catch(e){setStatus('เปิด LINE Login ไม่สำเร็จ กรุณาลองอีกครั้ง');}};
+    return;
+  }
+  const session=await establishLineSession();if(!session)return;
+  if(profile?.displayName)$('customer-name').value=profile.displayName;
+ }catch(e){console.error('LINE Login:',e);setStatus(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ');$('products').innerHTML='<div class="empty">'+esc(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ')+'<br><button class="primary" style="margin-top:12px" onclick="location.reload()">ลองอีกครั้ง</button></div>';return;}
+ await requestLocationOnFirstLogin();await loadMenu();
 }
 const LOCATION_ONBOARDING_KEY='ca_location_onboarding_v1';
 function locationConsentKey(){return LOCATION_ONBOARDING_KEY+':'+(profile?.userId||'anonymous');}
