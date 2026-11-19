@@ -76,35 +76,13 @@ function getLineSession(){try{const s=JSON.parse(sessionStorage.getItem(LINE_SES
 function getLineIdToken(){return getLineSession()?.idToken||null;}
 let liffInitPromise=null;
 async function establishLineSession(){
-  if(!window.liff)throw new Error('โหลด LINE LIFF SDK ไม่สำเร็จ กรุณาปิดหน้าแล้วเปิดจาก Rich Menu อีกครั้ง');
-  if(!liffInitPromise){
-    liffInitPromise=window.liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
-  }
-  await liffInitPromise;
-  if(!liff.isLoggedIn()){
-    if(!liff.isInClient()){
-      const returnUrl=new URL(location.href);
-      if(returnUrl.origin!==location.origin||!returnUrl.pathname.endsWith('/web-order.html'))throw new Error('ลิงก์กลับไม่ถูกต้อง');
-      location.replace('https://liff.line.me/'+LINE_LIFF_ID+'?return='+encodeURIComponent(returnUrl.href));
-      return null;
-    }
-    throw new Error('ไม่สามารถยืนยันบัญชี LINE ในแอปได้ กรุณาปิดแล้วเปิดจาก Rich Menu อีกครั้ง');
-  }
-  const idToken=liff.getIDToken();
-  if(!idToken)throw new Error('ไม่ได้รับ LINE ID Token กรุณาตรวจสอบ LIFF Scope: openid และ profile');
   const cached=getLineSession();
-  if(cached&&cached.idToken===idToken)return cached;
-  const res=await fetch(LINE_LOGIN_FUNCTION_URL,{
-    method:'POST',
-    headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
-    body:JSON.stringify({id_token:idToken})
-  });
-  const data=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
-  if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ไม่สามารถยืนยันบัญชี LINE ได้');
-  const session={idToken:data.id_token,expiresAt:Number(data.id_token_expires_at)||Date.now()+3600000,profile:data.profile||null};
-  sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
-  profile=session.profile;
-  return session;
+  if(cached)return cached;
+  // Authenticate on the registered LIFF endpoint before returning to this page.
+  const returnUrl=new URL(location.href);
+  if(returnUrl.origin!==location.origin||!returnUrl.pathname.endsWith('/web-order.html'))throw new Error('ลิงก์กลับไม่ถูกต้อง');
+  location.replace('https://liff.line.me/'+LINE_LIFF_ID+'?return='+encodeURIComponent(returnUrl.href));
+  return null;
 }
 
 const $=id=>document.getElementById(id);
