@@ -93,7 +93,7 @@ async function establishLineSession(){
   const res=await fetch(LINE_LOGIN_FUNCTION_URL,{
     method:'POST',
     headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
-    body:JSON.stringify({id_token:idToken})
+    body:JSON.stringify({id_token:idToken,liff_id:LINE_LIFF_ID})
   });
   const data=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
   if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ไม่สามารถยืนยันบัญชี LINE ได้');
@@ -239,7 +239,7 @@ async function submitOrder(){
   try{
     // Read location only after explicit consent after LINE login; GPS failure never blocks checkout.
     const checkoutPosition=hasLocationConsent()?await getCurrentPosition().catch(e=>{console.info('Location not shared:',e.message);return null;}):null;
-    const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),items})});
+    const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),liff_id:LINE_LIFF_ID,items})});
     const result=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
     if(!res.ok||result.success!==true)throw new Error(result.error||'ไม่สามารถสร้างคำสั่งซื้อได้');
     cart.clear();activeRequestId=null;updateCart();hideModal('cart-modal');
@@ -298,7 +298,7 @@ async function postLocation(action,orderId,position=null){
   const coords=position?.coords;
   const response=await fetch(LOCATION_FUNCTION_URL,{
     method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
-    body:JSON.stringify({id_token:token,order_id:orderId,action,latitude:coords?.latitude,longitude:coords?.longitude,accuracy_m:coords?.accuracy})
+    body:JSON.stringify({id_token:token,liff_id:LINE_LIFF_ID,order_id:orderId,action,latitude:coords?.latitude,longitude:coords?.longitude,accuracy_m:coords?.accuracy})
   });
   const data=await response.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
   if(!response.ok||data.success!==true)throw new Error(data.error||'บันทึกตำแหน่งไม่สำเร็จ');
@@ -349,7 +349,7 @@ async function loadMyOrders(){
   const token=getLineIdToken();if(!token)return;
   trackingLoading=true;
   try{
-    const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:token,limit:10})});
+    const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:token,liff_id:LINE_LIFF_ID,limit:10})});
     const data=await res.json().catch(()=>({error:'invalid_response'}));
     if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดประวัติได้');
     const orders=data.orders||[];lastCustomerOrders=orders;
