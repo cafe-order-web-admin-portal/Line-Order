@@ -210,6 +210,50 @@
 @media(max-width:800px){.queue-list{padding:6px;gap:5px;min-height:160px}.live-order-card{padding:6px 8px}.live-order-number{font-size:12px}.live-order-compact .live-order-customer{font-size:9px}.live-order-compact .live-order-total{font-size:13px}.live-order-next{min-height:31px;font-size:9px}}
 
 .order-product-options{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:5px}.order-product-options b{font-size:9px;color:#53665a;font-weight:700}.order-product-options span{display:inline-flex;align-items:center;font-size:10px;line-height:1.4;color:#075b39;background:#e3f2e8;border:1px solid #c9e4d2;border-radius:6px;padding:3px 7px;font-weight:600}.order-product-options.order-options-none{font-size:9px;color:#89938b}
+
+/* LIVE ORDERS: scroll long product lists inside each card; keep actions accessible */
+.live-order-card .order-products-list{
+  max-height:clamp(150px,34vh,260px)!important;
+  min-height:0;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  scrollbar-width:thin;
+  scrollbar-gutter:stable;
+  padding-right:3px;
+}
+.live-order-card .live-order-actions{
+  position:relative;
+  z-index:5;
+  flex:0 0 auto!important;
+  pointer-events:auto!important;
+  margin-top:8px!important;
+}
+.live-order-card .live-order-actions button{
+  position:relative;
+  z-index:6;
+  pointer-events:auto!important;
+  touch-action:manipulation;
+  cursor:pointer;
+}
+@media(max-width:800px){
+  .orders-panel{min-height:0;max-height:none}
+  .queue-list{
+    max-height:min(68svh,620px)!important;
+    min-height:160px;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    overscroll-behavior-y:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+  .live-order-card .order-products-list{
+    max-height:clamp(140px,30svh,230px)!important;
+  }
+  .live-order-card .live-order-actions{margin-top:7px!important}
+}
+
 </style>
 </head>
 <body>
