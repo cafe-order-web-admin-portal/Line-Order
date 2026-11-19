@@ -128,30 +128,54 @@ Deno.serve(async (req: Request) => {
 
     const result = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
     let customerNotified = false;
-    const token = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN")?.trim();
+    let admin: ReturnType<typeof createClient> | null = null;
+    let orderBranchId: string | null = null;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim();
+
+    if (serviceRoleKey && supabaseUrl && typeof result.order_id === "string") {
+      admin = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data: orderMeta, error: orderMetaError } = await admin
+        .from("orders").select("branch_id").eq("id", result.order_id).maybeSingle();
+      if (orderMetaError) {
+        console.error("Order branch lookup failed:", orderMetaError.code, orderMetaError.message);
+      } else {
+        orderBranchId = orderMeta?.branch_id ?? null;
+      }
+    }
+
+    let token = "";
+    if (admin && orderBranchId) {
+      const { data: configs, error: configError } = await admin.rpc("get_line_messaging_configs");
+      if (configError) {
+        console.error("LINE Messaging API config lookup failed:", configError.code, configError.message);
+      }
+      const branchConfig = Array.isArray(configs)
+        ? configs.find((x: Record<string, unknown>) => String(x.branch_id) === orderBranchId)
+        : null;
+      token = String(branchConfig?.channel_access_token ?? "").trim()
+        || (branchConfig?.use_legacy_env_credentials === true
+          ? (Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN")?.trim() ?? "")
+          : "");
+    }
+
     if (token && typeof result.line_user_id === "string" && result.line_user_id) {
-      const amount = typeof result.total_amount === "number" ? "฿" + result.total_amount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : undefined;
+      const amount = typeof result.total_amount === "number"
+        ? "฿" + result.total_amount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : undefined;
       const finalStatus = String(result.order_status ?? newStatus);
       const orderNumber = String(result.order_number ?? "-");
       const notification = statusFlex(finalStatus, orderNumber, amount);
       customerNotified = await pushStatus(result.line_user_id, notification, token);
 
-      // Save the successful customer-facing LINE push into the same conversation history.
-      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim();
-      if (customerNotified && serviceRoleKey && supabaseUrl && typeof result.order_id === "string") {
-        const admin = createClient(supabaseUrl, serviceRoleKey, {
-          auth: { autoRefreshToken: false, persistSession: false },
-        });
-        const { data: orderMeta, error: orderMetaError } = await admin
-          .from("orders").select("branch_id").eq("id", result.order_id).maybeSingle();
-        if (orderMetaError) {
-          console.error("Order branch lookup for chat log failed:", orderMetaError.code, orderMetaError.message);
-        }
+      // Store the customer-facing notification against the branch that owns this order.
+      if (customerNotified && admin && orderBranchId && typeof result.order_id === "string") {
         const eventStamp = String(result.updated_at ?? new Date().toISOString());
         const { error: chatLogError } = await admin.from("line_chat_messages").upsert({
           event_key: `order:${result.order_id}:status:${finalStatus}:${eventStamp}`,
-          branch_id: orderMeta?.branch_id ?? null,
+          branch_id: orderBranchId,
           line_user_id: result.line_user_id,
           direction: "outbound",
           event_type: "order_status",
