@@ -56,6 +56,7 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 <script>
 'use strict';
 const DEFAULT_LINE_LIFF_ID='2012679988-ORHhLD7I';
+const LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login';
 const LINE_LIFF_ID=(new URLSearchParams(location.search).get('liff_id')||DEFAULT_LINE_LIFF_ID).trim();
 const LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login';
 const LINE_SESSION_KEY='ca_line_liff_session_v1';
@@ -84,15 +85,38 @@ function getLineSession(){
 function getLineIdToken(){return getLineSession()?.idToken||null;}
 async function establishLineSession(){
   const cached=getLineSession();
-  if(cached)return cached;
-  // The website has a branch-specific LIFF link. Authenticate through that LIFF app,
-  // then return to this page with the verified branch session.
-  const returnUrl=new URL(location.href);
-  if(returnUrl.origin!==location.origin||!returnUrl.pathname.endsWith('/web-order.html'))throw new Error('ลิงก์กลับไม่ถูกต้อง');
-  location.replace('https://liff.line.me/'+encodeURIComponent(LINE_LIFF_ID)+'?return='+encodeURIComponent(returnUrl.href));
-  return null;
-}
+  if(!cached){
+    // Authenticate through the branch-specific LIFF app, then return to this website.
+    const returnUrl=new URL(location.href);
+    if(returnUrl.origin!==location.origin||!returnUrl.pathname.endsWith('/web-order.html'))throw new Error('ลิงก์กลับไม่ถูกต้อง');
+    location.replace('https://liff.line.me/'+encodeURIComponent(LINE_LIFF_ID)+'?return='+encodeURIComponent(returnUrl.href));
+    return null;
+  }
 
+  // Re-resolve the branch from the registered LIFF app on every website visit.
+  const res=await fetch(LINE_LOGIN_FUNCTION_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
+    body:JSON.stringify({id_token:cached.idToken,liff_id:LINE_LIFF_ID})
+  });
+  const data=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
+  if(!res.ok||!data.success||!data.id_token||!data.branch?.id||!data.branch?.branch_code){
+    throw new Error(data.error||'ไม่สามารถยืนยันสาขาจาก LINE LIFF นี้ได้');
+  }
+  const session={
+    idToken:data.id_token,
+    expiresAt:Number(data.id_token_expires_at)||cached.expiresAt,
+    profile:data.profile||cached.profile||null,
+    liffId:LINE_LIFF_ID,
+    branchId:data.branch.id,
+    branchCode:data.branch.branch_code,
+    branchName:data.branch.branch_name
+  };
+  sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
+  localStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
+  profile=session.profile;
+  return session;
+}
 
 const $=id=>document.getElementById(id);
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
