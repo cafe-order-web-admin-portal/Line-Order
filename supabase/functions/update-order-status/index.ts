@@ -131,7 +131,36 @@ Deno.serve(async (req: Request) => {
     const token = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN")?.trim();
     if (token && typeof result.line_user_id === "string" && result.line_user_id) {
       const amount = typeof result.total_amount === "number" ? "฿" + result.total_amount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : undefined;
-      customerNotified = await pushStatus(result.line_user_id, statusFlex(String(result.order_status ?? newStatus), String(result.order_number ?? "-"), amount), token);
+      const finalStatus = String(result.order_status ?? newStatus);
+      const orderNumber = String(result.order_number ?? "-");
+      const notification = statusFlex(finalStatus, orderNumber, amount);
+      customerNotified = await pushStatus(result.line_user_id, notification, token);
+
+      // Save the successful customer-facing LINE push into the same conversation history.
+      const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim();
+      if (customerNotified && serviceRoleKey && supabaseUrl && typeof result.order_id === "string") {
+        const admin = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        const { data: orderMeta, error: orderMetaError } = await admin
+          .from("orders").select("branch_id").eq("id", result.order_id).maybeSingle();
+        if (orderMetaError) {
+          console.error("Order branch lookup for chat log failed:", orderMetaError.code, orderMetaError.message);
+        }
+        const eventStamp = String(result.updated_at ?? new Date().toISOString());
+        const { error: chatLogError } = await admin.from("line_chat_messages").upsert({
+          event_key: `order:${result.order_id}:status:${finalStatus}:${eventStamp}`,
+          branch_id: orderMeta?.branch_id ?? null,
+          line_user_id: result.line_user_id,
+          direction: "outbound",
+          event_type: "order_status",
+          message_type: "flex",
+          message_text: String(notification.altText ?? `อัปเดตสถานะคำสั่งซื้อ ${orderNumber}: ${finalStatus}`),
+          event_timestamp: new Date().toISOString(),
+        }, { onConflict: "event_key", ignoreDuplicates: true });
+        if (chatLogError) console.error("Order status chat history insert failed:", chatLogError.code, chatLogError.message);
+      }
     }
     return reply(origin, 200, { success: true, ...result, customer_notified: customerNotified });
   } catch (error) {
