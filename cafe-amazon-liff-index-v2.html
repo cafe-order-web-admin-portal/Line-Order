@@ -58,7 +58,7 @@ main{max-width:760px;margin:auto;padding:16px}.status{font-size:12px;color:var(-
 const LINE_LIFF_ID='2012679988-ORHhLD7I';
 const LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login';
 const LINE_SESSION_KEY='ca_line_liff_session_v1';
-const BRANCH_CODE='PKT001';
+const BRANCH_CODE='B0001'; // รหัสสาขาจากหลังร้าน (CMS) — ซิงก์อัตโนมัติ · PKT001 = รหัสเดิม (สำรองช่วงเปลี่ยน)
 const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
 const TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders';
 const LOCATION_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/share-customer-location';
@@ -155,7 +155,7 @@ async function requestLocationOnFirstLogin(){
 function hasLocationConsent(){return localStorage.getItem(locationConsentKey())==='granted';}
 async function loadMenu(){
   setStatus('กำลังค้นหาสาขา '+BRANCH_CODE+'…');
-  const branchRes=await db.from('branches').select('id,branch_code,branch_name').eq('branch_code',BRANCH_CODE).single();
+  const branchRes=await db.from('branches').select('id,branch_code,branch_name').in('branch_code',[BRANCH_CODE,'PKT001']).order('branch_code').limit(1).single();
   if(branchRes.error||!branchRes.data){setStatus('ค้นหาสาขาไม่สำเร็จ: '+(branchRes.error?.message||'ไม่พบสาขา'));$('products').innerHTML='<div class="empty">ไม่พบข้อมูลสาขา กรุณาตรวจสอบรหัสสาขา</div>';return;}
   const branch=branchRes.data;
   const [catRes,linkRes]=await Promise.all([

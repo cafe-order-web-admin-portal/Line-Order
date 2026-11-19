@@ -619,14 +619,14 @@
       ? ['branch_code','product_code','price','is_available']
       : ['branch_code','product_code','product_name','category_name','description','price','is_available','is_active','is_featured','display_order','image_url'];
     const rows=[header, manager
-      ? ['PKT001','CA-COF-001','', 'FALSE']
-      : ['PKT001','CA-COF-001','เอสเปรสโซ','กาแฟ','', '', 'FALSE','FALSE','FALSE',1,'']];
+      ? ['B0001','CA-COF-001','', 'FALSE']
+      : ['B0001','CA-COF-001','เอสเปรสโซ','กาแฟ','', '', 'FALSE','FALSE','FALSE',1,'']];
     const ws=XLSX.utils.aoa_to_sheet(rows);
     ws['!cols']=header.map(h=>({wch:Math.max(16,h.length+4)}));
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Import');
     const guide=XLSX.utils.aoa_to_sheet([
       ['คำแนะนำการกรอกข้อมูล'],
-      ['branch_code','รหัสสาขา เช่น PKT001 ต้องตรงกับสาขาที่เลือกบนหน้าเว็บ'],
+      ['branch_code','รหัสสาขา เช่น B0001 ต้องตรงกับสาขาที่เลือกบนหน้าเว็บ'],
       ['product_code','รหัสสินค้า ไม่ซ้ำในไฟล์'],
       ['product_name','ชื่อสินค้า (Super Admin เท่านั้น)'],
       ['category_name','ชื่อหมวดหมู่ต้องตรงกับข้อมูลในระบบ'],
