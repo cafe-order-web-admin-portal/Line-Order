@@ -216,7 +216,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: activeBranches, error: branchLookupError } = await admin
       .from("branches")
-      .select("branch_code")
+      .select("id,branch_code")
       .eq("is_active", true);
     if (branchLookupError) {
       console.error("Active branch lookup failed:", branchLookupError.code, branchLookupError.message);
@@ -235,6 +235,7 @@ Deno.serve(async (req: Request) => {
       return response(origin, 409, { success: false, error: "รหัสสาขาไม่สามารถระบุสาขาได้อย่างชัดเจน", code: "branch_code_ambiguous" });
     }
     const branchCode = branchMatches[0].branch_code.trim().toUpperCase();
+    const branchId = branchMatches[0].id as string;
 
     const { data, error } = await admin.rpc("create_liff_order", {
       p_request_id: requestId,
@@ -269,6 +270,19 @@ Deno.serve(async (req: Request) => {
           statusFlex("pending", orderNumber, "฿" + total),
           accessToken,
         );
+        if (customerNotified && typeof result.order_id === "string") {
+          const { error: chatLogError } = await admin.from("line_chat_messages").upsert({
+            event_key: `order:${result.order_id}:created:customer`,
+            branch_id: branchId,
+            line_user_id: lineClaims.sub,
+            direction: "outbound",
+            event_type: "order_created",
+            message_type: "flex",
+            message_text: `ได้รับคำสั่งซื้อแล้ว · Order ${orderNumber} · ยอดรวม ฿${total}`,
+            event_timestamp: new Date().toISOString(),
+          }, { onConflict: "event_key", ignoreDuplicates: true });
+          if (chatLogError) console.error("Order notification history insert failed:", chatLogError.code, chatLogError.message);
+        }
         const staffRecipient = Deno.env.get("LINE_ORDER_NOTIFY_TO")?.trim();
         if (staffRecipient) {
           staffNotified = await pushLineMessage(
