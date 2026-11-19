@@ -83,7 +83,9 @@ async function establishLineSession(){
   await liffInitPromise;
   if(!liff.isLoggedIn()){
     if(!liff.isInClient()){
-      liff.login();
+      const returnUrl=new URL(location.href);
+      if(returnUrl.origin!==location.origin||!returnUrl.pathname.endsWith('/web-order.html'))throw new Error('ลิงก์กลับไม่ถูกต้อง');
+      location.replace('https://liff.line.me/'+LINE_LIFF_ID+'?return='+encodeURIComponent(returnUrl.href));
       return null;
     }
     throw new Error('ไม่สามารถยืนยันบัญชี LINE ในแอปได้ กรุณาปิดแล้วเปิดจาก Rich Menu อีกครั้ง');
