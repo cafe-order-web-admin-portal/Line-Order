@@ -38,7 +38,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});
 let idToken=null,loading=false,locationWatchId=null,activeLocationOrderId=null,locationSending=false,lastLocationSentAt=0,lastSentLocation=null,locationHeartbeatTimer=null;
 async function getToken(){
- const cached=(()=>{try{return JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null')}catch(_){return null}})();
+ const cached=(()=>{try{return JSON.parse(localStorage.getItem(LINE_SESSION_KEY)||sessionStorage.getItem(LINE_SESSION_KEY)||'null')}catch(_){return null}})();
  if(cached?.idToken&&Number(cached.expiresAt)>Date.now()+60000)return cached.idToken;
  throw new Error('ไม่พบเซสชัน LINE กรุณาเปิดหน้าติดตามจาก Rich Menu อีกครั้ง');
 }
