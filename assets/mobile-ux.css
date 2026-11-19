@@ -51,3 +51,65 @@
 @media(prefers-reduced-motion:reduce){
   .mobile-bottom-nav *{transition:none!important;animation:none!important}
 }
+
+/* LIVE ORDERS: keep order handling first on narrow screens and honor device safe areas. */
+.orders-mobile-nav{display:none}
+@media(max-width:950px){
+  .orders-mobile-nav:not([hidden]){display:grid}
+  body:has(#mobile-bottom-nav){padding-bottom:0}
+  body:has(#mobile-bottom-nav)>.page{padding-bottom:calc(var(--mobile-nav-height) + 15px + var(--mobile-safe-bottom))}
+  .topbar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand actions" "status status";align-items:center;gap:5px 10px;min-height:65px;height:auto;padding:8px 12px}
+  .brand-wrap{grid-area:brand;gap:9px}
+  .brand-logo{width:76px;height:48px}
+  .brand-copy{padding-left:9px}
+  .brand{font-size:16px}
+  .brand-sub{font-size:9px}
+  .header-mid{grid-area:status;display:flex;gap:8px;width:100%;min-width:0;padding-left:2px}
+  .branch-live{font-size:10px;white-space:normal;overflow-wrap:anywhere}
+  .header-right{grid-area:actions;gap:6px;margin-left:auto}
+  .clock-wrap{display:none}
+  .header-btn{padding:7px 9px;font-size:10px}
+  .page{padding:9px 10px calc(var(--mobile-nav-height) + 16px + var(--mobile-safe-bottom))}
+  .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  .main-grid{display:flex!important;flex-direction:column;gap:10px}
+  .orders-panel{order:1;min-height:0;max-height:none}
+  .map-panel{order:2}
+  .queue-tabs{gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .queue-tabs::-webkit-scrollbar{display:none}
+  .queue-tabs .tab{min-height:40px;padding:8px 11px}
+  .queue-search input{min-height:44px;font-size:16px}
+  .queue-list{display:block!important;max-height:none!important;min-height:170px;padding:8px;overflow:visible!important}
+  .queue-list>.live-order-card{height:auto!important;min-height:0!important;max-height:min(68svh,640px)!important;overflow-x:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
+  .live-order-actions{gap:7px}
+  .live-order-next{min-height:44px!important;padding:9px 8px!important;font-size:12px!important}
+  .live-order-cancel{min-height:42px;padding:8px 10px;font-size:11px}
+  .map-frame #map{height:48svh;min-height:310px;max-height:520px}
+  .map-status{max-width:calc(100% - 28px)}
+  .bottom-strip{display:none}
+  .toast{top:76px;right:10px;left:10px;max-width:none}
+}
+@media(max-width:600px){
+  .topbar{grid-template-columns:minmax(0,1fr) auto;padding:7px 9px;gap:4px 7px}
+  .brand-logo{width:62px;height:42px}
+  .brand{font-size:14px}
+  .brand-sub{font-size:8px}
+  .brand-copy{padding-left:7px}
+  .header-right{gap:4px}
+  .header-btn{padding:6px 7px;font-size:9px}
+  .page{padding:7px 7px calc(var(--mobile-nav-height) + 14px + var(--mobile-safe-bottom))}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .stat{min-width:0}
+  .stat-label{white-space:normal}
+  .map-frame #map{height:44svh;min-height:290px}
+  .map-status{min-width:150px;padding:7px 8px}
+  .map-status-count{font-size:19px}
+  .legend{max-width:calc(100% - 20px);line-height:1.2}
+  .panel-title{white-space:normal}
+  .orders-head{min-height:58px}
+  .orders-head-left{min-width:0}
+  .sound-btn{min-height:40px;padding:7px 9px}
+  .live-order-card{padding:10px!important}
+  .live-order-number{font-size:15px!important}
+  .live-order-total{font-size:17px}
+  .live-order-actions{grid-template-columns:minmax(0,1fr) auto}
+}
