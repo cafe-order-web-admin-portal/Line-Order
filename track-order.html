@@ -42,17 +42,22 @@ function getCachedLineSession(){
 }
 async function getToken(){
  const cached=getCachedLineSession();
- if(cached){profile=cached.profile||null;sessionStorage.removeItem('ca_track_auth_redirected');return cached.idToken;}
- // Track must enter through the registered LIFF endpoint first. Opening this
- // GitHub Pages URL directly inside LINE does not reliably initialize LIFF.
- const redirected=sessionStorage.getItem('ca_track_auth_redirected');
- if(!redirected){
-  sessionStorage.setItem('ca_track_auth_redirected','1');
-  const entry='https://liff.line.me/'+LINE_LIFF_ID+'?page=track';
-  location.replace(entry);
-  return null;
+ if(cached){profile=cached.profile||null;return cached.idToken;}
+ if(!window.liff)throw new Error('โหลด LINE LIFF SDK ไม่สำเร็จ กรุณาปิดแล้วเปิดจาก Rich Menu อีกครั้ง');
+ if(!liffInitPromise)liffInitPromise=liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
+ await liffInitPromise;
+ if(!liff.isLoggedIn()){
+  if(!liff.isInClient()){liff.login({redirectUri:location.href});return null;}
+  throw new Error('ยังไม่ได้เข้าสู่ระบบ LINE กรุณาปิดแล้วกด Rich Menu ติดตาม Order ใหม่');
  }
- throw new Error('ยืนยันตัวตน LINE ไม่สำเร็จ กรุณาปิดหน้าต่างนี้ แล้วเปิดเมนู Track ใหม่อีกครั้ง');
+ const lineIdToken=liff.getIDToken();
+ if(!lineIdToken)throw new Error('ไม่ได้รับ LINE ID Token กรุณาตรวจสอบ LIFF Scope openid และ profile');
+ const res=await fetch(LINE_LOGIN_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:lineIdToken})});
+ const data=await res.json().catch(()=>({}));
+ if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ยืนยันตัวตน LINE ไม่สำเร็จ');
+ const session={idToken:data.id_token,expiresAt:Number(data.id_token_expires_at)||Date.now()+3600000,profile:data.profile||null};
+ localStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify(session));
+ profile=session.profile;return session.idToken;
 }
 
 // GPS จะทำงานต่อเมื่อผู้ใช้เคยยินยอมแชร์ตำแหน่งสำหรับออเดอร์นี้แล้ว
