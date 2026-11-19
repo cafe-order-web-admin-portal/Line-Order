@@ -5,7 +5,6 @@ import { createClient } from "npm:@supabase/supabase-js@2.119.0";
 
 const ALLOWED_ORIGINS = new Set(["https://cafe-order-web-admin-portal.github.io", "https://cafe-amazon-web-admin-portal.github.io"]);
 const LINE_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
-const EXPECTED_LINE_LOGIN_CHANNEL_ID = "2012679988";
 
 function cors(origin: string | null): HeadersInit {
   return {
@@ -74,9 +73,10 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
     const idToken = typeof body?.id_token === "string" ? body.id_token.trim() : "";
+    const liffId = typeof body?.liff_id === "string" ? body.liff_id.trim() : "";
     const orderId = typeof body?.order_id === "string" ? body.order_id.trim() : "";
     const action = typeof body?.action === "string" ? body.action : "";
-    if (!idToken || idToken.length > 12000 || !orderId || !["start", "update", "stop"].includes(action)) {
+    if (!idToken || idToken.length > 12000 || !/^\\d+-[A-Za-z0-9]+$/.test(liffId) || !orderId || !["start", "update", "stop"].includes(action)) {
       return reply(origin, 400, { error: "invalid_location_request" });
     }
 
@@ -95,13 +95,29 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const lineUserId = await verifyLineIdToken(idToken, EXPECTED_LINE_LOGIN_CHANNEL_ID);
     const admin = createClient(requiredEnv("SUPABASE_URL"), requiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    const { data: app, error: appError } = await admin
+      .from("line_liff_apps").select("liff_id,line_login_channel_id")
+      .eq("liff_id", liffId).eq("is_active", true).maybeSingle();
+    if (appError || !app) return reply(origin, 403, { error: "LIFF นี้ยังไม่ได้ผูกกับสาขา" });
+
+    const { data: channel, error: channelError } = await admin
+      .from("line_channels").select("line_login_channel_id,branch_id")
+      .eq("line_login_channel_id", app.line_login_channel_id).eq("is_active", true).maybeSingle();
+    if (channelError || !channel) return reply(origin, 403, { error: "ไม่พบ LINE Channel ที่ใช้งานได้" });
+
+    const { data: branch, error: branchError } = await admin
+      .from("branches").select("id,branch_code")
+      .eq("id", channel.branch_id).eq("is_active", true).maybeSingle();
+    if (branchError || !branch) return reply(origin, 403, { error: "สาขาที่ผูกกับ LINE นี้ปิดให้บริการ" });
+
+    const lineUserId = await verifyLineIdToken(idToken, channel.line_login_channel_id);
     const { data, error } = await admin.rpc("record_liff_customer_location", {
       p_line_user_id: lineUserId,
       p_order_id: orderId,
+      p_branch_id: branch.id,
       p_action: action,
       p_latitude: latitude,
       p_longitude: longitude,
