@@ -145,7 +145,7 @@ async function start(){
  const returnParam=sessionStorage.getItem(EXTERNAL_RETURN_KEY);
  if(returnParam){
   sessionStorage.removeItem(EXTERNAL_RETURN_KEY);
-  try{const target=new URL(returnParam);if(target.origin===location.origin&&target.pathname.endsWith('/web-order.html')){location.replace(target.href);return;}}
+  try{const target=new URL(returnParam);if(target.origin===location.origin&&['/web-order.html','/track-order.html'].includes(target.pathname)){location.replace(target.href);return;}}
   catch(error){console.warn('Invalid external return URL:',error);}
  }
  await requestLocationOnFirstLogin();
