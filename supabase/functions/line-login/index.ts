@@ -1,7 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.119.0";
 
 const CHANNEL_ID = "2012679988";
-const TOKEN_URL = "https://api.line.me/oauth2/v2.1/token";
 const VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
 const ALLOWED_ORIGINS = new Set([
   "https://cafe-order-web-admin-portal.github.io",
@@ -29,12 +28,6 @@ function env(name: string): string {
   if (!value) throw new Error("Missing required Edge Function secret: " + name);
   return value;
 }
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin");
@@ -55,58 +48,30 @@ Deno.serve(async (req: Request) => {
     const contentLength = Number(req.headers.get("content-length") || "0");
     if (contentLength > 16000) return reply(origin, 413, { error: "request_too_large" });
     const body = await req.json();
-    const code = typeof body?.code === "string" ? body.code.trim() : "";
-    const verifier = typeof body?.code_verifier === "string" ? body.code_verifier : "";
-    const nonce = typeof body?.nonce === "string" ? body.nonce : "";
-    const redirectUri = typeof body?.redirect_uri === "string" ? body.redirect_uri : "";
-    const expectedRedirectUri = env("LINE_LOGIN_REDIRECT_URI");
-    if (!code || code.length > 4096 || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier) ||
-        !/^[A-Za-z0-9_-]{20,200}$/.test(nonce) || redirectUri !== expectedRedirectUri) {
-      return reply(origin, 400, { error: "invalid_login_request" });
+    const idToken = typeof body?.id_token === "string" ? body.id_token.trim() : "";
+    if (!idToken || idToken.length > 12000 || idToken.split(".").length !== 3) {
+      return reply(origin, 400, { error: "invalid_liff_id_token" });
     }
 
-    const tokenResponse = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: expectedRedirectUri,
-        client_id: CHANNEL_ID,
-        client_secret: env("LINE_LOGIN_CHANNEL_SECRET"),
-        code_verifier: verifier,
-      }),
-    });
-    const tokenData = await tokenResponse.json().catch(() => ({}));
-    if (!tokenResponse.ok || typeof tokenData.id_token !== "string") {
-      console.error("LINE authorization-code exchange rejected", {
-        status: tokenResponse.status,
-        error: tokenData.error ?? null,
-        error_description: tokenData.error_description ?? null,
-      });
-      return reply(origin, 401, { error: "LINE authorization code ไม่ถูกต้องหรือหมดอายุ กรุณาลองใหม่" });
-    }
-
+    // Verify the LIFF-issued ID token server-side. Never trust profile data sent by the browser.
     const verifyResponse = await fetch(VERIFY_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ id_token: tokenData.id_token, client_id: CHANNEL_ID, nonce }),
+      body: new URLSearchParams({ id_token: idToken, client_id: CHANNEL_ID }),
     });
     const claims = await verifyResponse.json().catch(() => ({}));
     const now = Math.floor(Date.now() / 1000);
     if (!verifyResponse.ok || claims.aud !== CHANNEL_ID ||
         claims.iss !== "https://access.line.me" ||
         typeof claims.sub !== "string" || !claims.sub ||
-        Number(claims.exp) <= now ||
-        typeof claims.nonce !== "string" || !constantTimeEqual(claims.nonce, nonce)) {
-      console.error("LINE ID token verification failed", {
+        !Number.isFinite(Number(claims.exp)) || Number(claims.exp) <= now) {
+      console.error("LIFF ID token verification failed", {
         status: verifyResponse.status,
         aud: claims.aud ?? null,
         iss: claims.iss ?? null,
         hasSubject: typeof claims.sub === "string",
-        nonceMatched: typeof claims.nonce === "string" && constantTimeEqual(claims.nonce, nonce),
       });
-      return reply(origin, 401, { error: "LINE ID Token ไม่ผ่านการตรวจสอบ กรุณาเข้าสู่ระบบใหม่" });
+      return reply(origin, 401, { error: "LINE ID Token ไม่ผ่านการตรวจสอบ กรุณาเปิดจาก Rich Menu ใหม่" });
     }
 
     const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
@@ -117,7 +82,6 @@ Deno.serve(async (req: Request) => {
       ? claims.name.trim().slice(0, 120)
       : "LINE Customer";
 
-    // Update only the display name for existing customers; never overwrite their phone.
     const { data: existing, error: lookupError } = await admin
       .from("customers").select("id").eq("line_user_id", lineUserId).maybeSingle();
     if (lookupError) throw new Error("customer_lookup_failed");
@@ -139,8 +103,7 @@ Deno.serve(async (req: Request) => {
 
     return reply(origin, 200, {
       success: true,
-      id_token: tokenData.id_token,
-      expires_in: Number(tokenData.expires_in) || 3600,
+      id_token: idToken,
       id_token_expires_at: Number(claims.exp) * 1000,
       profile: {
         userId: lineUserId,
@@ -150,6 +113,6 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     console.error("line-login failed:", error instanceof Error ? error.message : error);
-    return reply(origin, 500, { error: "ระบบ LINE Login ยังตั้งค่าไม่ครบ กรุณาติดต่อผู้ดูแลระบบ" });
+    return reply(origin, 500, { error: "ไม่สามารถยืนยันบัญชี LINE ได้ กรุณาลองใหม่" });
   }
 });
