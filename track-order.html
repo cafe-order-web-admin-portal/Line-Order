@@ -109,7 +109,7 @@ async function resumeLocationSharing(orders){
   },e=>console.warn('GPS watch:',e.message),{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
  }catch(e){console.warn('Resume GPS sharing:',e.message);}
 }
-\nfunction renderOrder(o){
+function renderOrder(o){
  const st=statusInfo[o.order_status]||{label:o.order_status||'ไม่ทราบสถานะ',icon:'ℹ️',step:0};
  const items=(o.items||[]).map(it=>'<div>'+esc(it.product_name||'สินค้า')+' × '+Number(it.quantity||0)+(Array.isArray(it.selected_options)&&it.selected_options.length?'<small>'+esc(it.selected_options.map(x=>x.option_name||x.option_value||'').filter(Boolean).join(' · '))+'</small>':'')+'</div>').join('');
  const progress=st.step<0?'': '<div class="progress">'+[0,1,2,3].map(n=>'<i class="step '+(n<=st.step?'done':'')+'"></i>').join('')+'</div>';
