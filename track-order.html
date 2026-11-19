@@ -38,17 +38,13 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});
 let idToken=null,loading=false;
 async function getToken(){
- if(!window.liff)throw new Error('ไม่สามารถโหลด LINE ได้ กรุณาเปิดจาก Rich Menu อีกครั้ง');
- await liff.init({liffId:LINE_LIFF_ID,withLoginOnExternalBrowser:true});
- if(!liff.isLoggedIn()){if(!liff.isInClient()){liff.login({redirectUri:location.href});return null;}throw new Error('กรุณาปิดแล้วเปิดหน้านี้จาก Rich Menu อีกครั้ง');}
- const token=liff.getIDToken();if(!token)throw new Error('ไม่พบ LINE ID Token กรุณาตรวจสอบ LIFF Scope openid และ profile');
  const cached=(()=>{try{return JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null')}catch(_){return null}})();
- if(cached?.idToken===token&&Number(cached.expiresAt)>Date.now()+60000)return token;
- const res=await fetch(LINE_LOGIN_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:token})});
- const data=await res.json().catch(()=>({}));
- if(!res.ok||!data.success||!data.id_token)throw new Error(data.error||'ยืนยันบัญชี LINE ไม่สำเร็จ');
- sessionStorage.setItem(LINE_SESSION_KEY,JSON.stringify({idToken:data.id_token,expiresAt:Number(data.id_token_expires_at)||Date.now()+3600000,profile:data.profile||null}));
- return data.id_token;
+ if(cached?.idToken&&Number(cached.expiresAt)>Date.now()+60000)return cached.idToken;
+ // Authenticate through the registered LIFF endpoint, then return to this page.
+ const returnUrl=new URL(location.href);
+ if(returnUrl.origin!==location.origin||returnUrl.pathname!==location.pathname)throw new Error('ลิงก์ติดตามคำสั่งซื้อไม่ถูกต้อง');
+ location.replace('https://liff.line.me/'+LINE_LIFF_ID+'?return='+encodeURIComponent(returnUrl.href));
+ return null;
 }
 function renderOrder(o){
  const st=statusInfo[o.order_status]||{label:o.order_status||'ไม่ทราบสถานะ',icon:'ℹ️',step:0};
