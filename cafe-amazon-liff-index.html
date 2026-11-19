@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#5b3a27"><title>Café Amazon | สั่งเครื่องดื่ม</title>
+<meta name="theme-color" content="#145b3a"><title>Café Amazon | สั่งเครื่องดื่ม</title>
 <script>try{if(new URLSearchParams(location.search).get("page")==="track")document.documentElement.classList.add("track-route-pending");}catch(_){}</script>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0"></script>
@@ -124,8 +124,8 @@ header .top,header .brand,header .sub,header .branch,header .hero{visibility:vis
   display:block!important;visibility:visible!important;opacity:1!important;
   mix-blend-mode:normal!important;
 }
-.card .photo img.photo-photo{filter:drop-shadow(0 7px 7px rgba(38,29,20,.18))!important}
-.card .photo img.photo-cutout{filter:drop-shadow(0 8px 8px rgba(28,35,25,.2))!important}
+.card .photo img.photo-photo{mix-blend-mode:multiply!important;filter:contrast(1.28) saturate(1.12) drop-shadow(0 7px 7px rgba(38,29,20,.18))!important}
+.card .photo img.photo-cutout{mix-blend-mode:normal!important;filter:contrast(1.05) drop-shadow(0 8px 8px rgba(28,35,25,.2))!important}
 .card .row .add{
   display:inline-flex!important;align-items:center!important;justify-content:center!important;
   flex:0 0 auto!important;width:auto!important;min-width:86px!important;min-height:40px!important;
