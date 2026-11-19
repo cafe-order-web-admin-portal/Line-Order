@@ -332,6 +332,10 @@ button#checkout.checkout{
   #cart-modal .sheet{border-radius:20px 20px 0 0!important}
 }
 
+
+/* Keep only the explicit pseudo-label on the cart action (avoid doubled text). */
+#checkout.checkout{font-size:0!important}
+#checkout.checkout::after{font-size:14px!important}
 </style>
 </head>
 <body>
