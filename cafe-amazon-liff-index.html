@@ -371,7 +371,7 @@ async function postLocation(action,orderId,position=null){
   const coords=position?.coords;
   const response=await fetch(LOCATION_FUNCTION_URL,{
     method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
-    body:JSON.stringify({id_token:token,order_id:orderId,action,latitude:coords?.latitude,longitude:coords?.longitude,accuracy_m:coords?.accuracy})
+    body:JSON.stringify({id_token:token,liff_id:LINE_LIFF_ID,order_id:orderId,action,latitude:coords?.latitude,longitude:coords?.longitude,accuracy_m:coords?.accuracy})
   });
   const data=await response.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
   if(!response.ok||data.success!==true)throw new Error(data.error||'บันทึกตำแหน่งไม่สำเร็จ');
