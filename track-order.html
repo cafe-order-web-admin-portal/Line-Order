@@ -58,7 +58,8 @@ function metersBetween(a,b){
 }
 async function resumeLocationSharing(orders){
  const active=(orders||[]).find(o=>o.location_share?.is_sharing&&!['completed','cancelled'].includes(o.order_status));
- if(!active||!navigator.geolocation)return;
+ if(!active){if(locationWatchId!==null&&navigator.geolocation)navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;activeLocationOrderId=null;lastSentLocation=null;lastLocationSentAt=0;return;}
+ if(!navigator.geolocation)return;
  if(activeLocationOrderId===active.id&&locationWatchId!==null)return;
  if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);
  activeLocationOrderId=active.id;locationSending=false;lastSentLocation=null;lastLocationSentAt=0;
