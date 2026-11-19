@@ -22,7 +22,7 @@
   };
   const state = {
     db:null, session:null, user:null, staff:null, branches:[], categories:[],
-    products:[], branchProducts:[], history:[], customers:[], optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:'dashboard', selectedOptionProduct:'', customerSearch:'',
+    products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:'dashboard', selectedOptionProduct:'', customerSearch:'',
     search:'', categoryFilter:'', importRows:[], importFileName:'', importErrors:[],
     busy:false
   };
@@ -86,7 +86,7 @@
   }
 
   async function reloadData() {
-    const [br,cat,prod,bp,hist,og,op,ogp,pol,cust]=await Promise.all([
+    const [br,cat,prod,bp,hist,og,op,ogp,pol,cust,chat]=await Promise.all([
       state.db.from('branches').select('id,branch_code,branch_name,is_active').eq('is_active',true).order('branch_code'),
       state.db.from('categories').select('id,category_name,sort_order,is_active').order('sort_order'),
       state.db.from('products').select('id,category_id,product_code,product_name,description,image_url,is_active,is_featured,display_order,created_at').order('display_order').order('product_name'),
@@ -98,15 +98,16 @@
       state.db.from('product_options').select('id,group_id,option_code,option_name,price_delta,is_active,sort_order').order('sort_order'),
       state.db.from('product_option_group_products').select('product_id,group_id,is_required,min_select,max_select,sort_order'),
       state.db.from('product_option_product_options').select('product_id,option_id,sort_order'),
-      state.db.from('customers').select('id,line_user_id,customer_name,phone,created_at').order('created_at',{ascending:false}).limit(500)
+      state.db.from('customers').select('id,line_user_id,customer_name,phone,created_at').order('created_at',{ascending:false}).limit(500),
+      state.db.from('line_chat_messages').select('id,branch_id,line_user_id,direction,event_type,message_type,message_text,event_timestamp,created_at').order('created_at',{ascending:false}).limit(1000)
     ]);
-    for (const [label,r] of [['สาขา',br],['หมวดหมู่',cat],['สินค้า',prod],['ราคาสาขา',bp],['ประวัติ Import',hist],['กลุ่มตัวเลือก',og],['ตัวเลือก',op],['ความสัมพันธ์กลุ่ม',ogp],['ความสัมพันธ์ตัวเลือก',pol],['ลูกค้า',cust]]) {
+    for (const [label,r] of [['สาขา',br],['หมวดหมู่',cat],['สินค้า',prod],['ราคาสาขา',bp],['ประวัติ Import',hist],['กลุ่มตัวเลือก',og],['ตัวเลือก',op],['ความสัมพันธ์กลุ่ม',ogp],['ความสัมพันธ์ตัวเลือก',pol],['ลูกค้า',cust],['ประวัติแชท',chat]]) {
       if(r.error) throw new Error(`โหลด${label}ไม่สำเร็จ: ${r.error.message}`);
     }
     state.branches=br.data||[]; state.categories=cat.data||[]; state.products=prod.data||[];
     state.branchProducts=bp.data||[]; state.history=hist.data||[];
     state.optionGroups=og.data||[]; state.options=op.data||[];
-    state.optionGroupProducts=ogp.data||[]; state.productOptionLinks=pol.data||[]; state.customers=cust.data||[];
+    state.optionGroupProducts=ogp.data||[]; state.productOptionLinks=pol.data||[]; state.customers=cust.data||[]; state.chatMessages=chat.data||[];
     if(isSuper()) {
       if(!state.branchId || !state.branches.some(b=>b.id===state.branchId)) state.branchId=state.branches[0]?.id||'';
     } else {
@@ -341,16 +342,46 @@
 
   function viewCustomers(){
     const q=String(state.customerSearch||'').trim().toLowerCase();
-    const rows=state.customers.filter(c=>!q||[c.customer_name,c.line_user_id,c.phone].some(v=>String(v||'').toLowerCase().includes(q)));
-    return `<div class="page-head"><div><h2>ข้อมูลลูกค้า LINE</h2><p>LINE UID และข้อมูลลูกค้าที่มีประวัติสั่งซื้อกับสาขา</p></div><span class="pill">${rows.length} รายชื่อ</span></div>
-      <div class="panel"><div class="toolbar"><input id="customer-search" class="search" placeholder="ค้นหาชื่อ / LINE UID / เบอร์โทร…" value="${esc(state.customerSearch)}"><span class="muted small">แสดงสูงสุด 500 รายชื่อล่าสุด</span></div></div>
-      <div class="panel"><div class="table-wrap"><table><thead><tr><th>ลูกค้า</th><th>LINE User ID (UID)</th><th>เบอร์โทร</th><th>วันที่เพิ่ม</th></tr></thead><tbody>
-      ${rows.map(c=>`<tr><td><b>${esc(c.customer_name||'LINE Customer')}</b></td><td><code style="font-size:11px;word-break:break-all">${esc(c.line_user_id||'-')}</code></td><td>${esc(c.phone||'-')}</td><td>${c.created_at?new Date(c.created_at).toLocaleString('th-TH'):'-'}</td></tr>`).join('')||'<tr><td colspan="4"><div class="empty-state">ยังไม่มีข้อมูลลูกค้า หรือยังไม่มี Order ในสาขานี้</div></td></tr>'}
-      </tbody></table></div></div>`;
+    const customers=state.customers.filter(c=>!q||[c.customer_name,c.line_user_id,c.phone].some(v=>String(v||'').toLowerCase().includes(q)));
+    const visibleChats=state.chatMessages.filter(m=>!m.branch_id||m.branch_id===state.branchId);
+    const conversations=new Map();
+    visibleChats.forEach(m=>{
+      const key=String(m.line_user_id||'');
+      if(!key)return;
+      if(!conversations.has(key))conversations.set(key,[]);
+      conversations.get(key).push(m);
+    });
+    const conversationRows=[...conversations.entries()].map(([uid,items])=>{
+      items.sort((a,b)=>new Date(a.created_at||a.event_timestamp||0)-new Date(b.created_at||b.event_timestamp||0));
+      const customer=state.customers.find(c=>c.line_user_id===uid);
+      return {uid,items,last:items[items.length-1],customer};
+    }).sort((a,b)=>new Date(b.last?.created_at||0)-new Date(a.last?.created_at||0));
+    const selected=conversationRows.find(x=>x.uid===state.selectedChatUserId);
+    const fmtTime=value=>value?new Date(value).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}):'-';
+    const messageLabel=m=>m.message_text||({image:'ส่งรูปภาพ',video:'ส่งวิดีโอ',audio:'ส่งเสียง',file:'ส่งไฟล์',sticker:'ส่งสติกเกอร์',follow:'เพิ่มเพื่อน',unfollow:'บล็อกบัญชี'}[m.message_type]||'กิจกรรม LINE');
+    return `<div class="page-head"><div><h2>ข้อมูลลูกค้า LINE</h2><p>ข้อมูลลูกค้าและประวัติการสนทนาจาก LINE Official Account</p></div><span class="pill">${customers.length} รายชื่อ · ${conversationRows.length} บทสนทนา</span></div>
+      <div class="panel"><div class="toolbar"><input id="customer-search" class="search" placeholder="ค้นหาชื่อ / LINE UID / เบอร์โทร…" value="${esc(state.customerSearch)}"><span class="muted small">ลูกค้าสูงสุด 500 ราย · ประวัติแชทล่าสุด 1,000 ข้อความ</span></div></div>
+      <div class="panel"><div class="panel-title"><h3>ประวัติการสนทนา LINE</h3><span class="muted small">จัดเก็บข้อความใหม่จาก Webhook ตั้งแต่เปิดใช้งาน</span></div>
+        <div class="table-wrap"><table><thead><tr><th>ลูกค้า</th><th>ข้อความล่าสุด</th><th>เวลา</th><th>จำนวนเหตุการณ์</th><th></th></tr></thead><tbody>
+          ${conversationRows.filter(x=>!q||[x.customer?.customer_name,x.uid,x.last?.message_text].some(v=>String(v||'').toLowerCase().includes(q))).map(x=>`<tr><td><b>${esc(x.customer?.customer_name||'LINE Customer')}</b><br><code style="font-size:10px;word-break:break-all">${esc(x.uid)}</code></td><td>${esc(messageLabel(x.last))}</td><td>${fmtTime(x.last?.created_at||x.last?.event_timestamp)}</td><td>${x.items.length}</td><td><button class="btn" data-open-chat="${esc(x.uid)}">เปิดแชท</button></td></tr>`).join('')||'<tr><td colspan="5"><div class="empty-state">ยังไม่มีประวัติแชทใหม่ที่ได้รับจาก LINE Webhook</div></td></tr>'}
+        </tbody></table></div>
+      </div>
+      ${selected?`<div class="panel"><div class="panel-title"><div><h3>บทสนทนา · ${esc(selected.customer?.customer_name||'LINE Customer')}</h3><code class="muted small">${esc(selected.uid)}</code></div><button class="btn" id="close-chat">ปิดบทสนทนา</button></div>
+        <div style="display:flex;flex-direction:column;gap:10px;max-height:520px;overflow:auto;padding:8px;background:#f7f8f6;border-radius:12px">
+          ${selected.items.map(m=>`<div style="display:flex;justify-content:${m.direction==='outbound'?'flex-end':'flex-start'}"><div style="max-width:82%;padding:10px 13px;border-radius:14px;background:${m.direction==='outbound'?'#e5f4e9':'#fff'};border:1px solid #e5e9e5;box-shadow:0 1px 3px #00000008"><div style="font-size:10px;color:#829087;margin-bottom:3px">${m.direction==='outbound'?'ร้าน':'ลูกค้า'} · ${esc(m.message_type||m.event_type||'message')}</div><div style="white-space:pre-wrap;word-break:break-word">${esc(messageLabel(m))}</div><div style="font-size:10px;color:#89928c;text-align:right;margin-top:4px">${fmtTime(m.event_timestamp||m.created_at)}</div></div></div>`).join('')}
+        </div>
+      </div>`:''}
+      <div class="panel"><div class="panel-title"><h3>รายชื่อลูกค้า</h3><span class="muted small">${customers.length} รายชื่อ</span></div>
+        <div class="table-wrap"><table><thead><tr><th>ลูกค้า</th><th>LINE User ID (UID)</th><th>เบอร์โทร</th><th>วันที่เพิ่ม</th></tr></thead><tbody>
+          ${customers.map(c=>`<tr><td><b>${esc(c.customer_name||'LINE Customer')}</b></td><td><code style="font-size:11px;word-break:break-all">${esc(c.line_user_id||'-')}</code></td><td>${esc(c.phone||'-')}</td><td>${c.created_at?new Date(c.created_at).toLocaleString('th-TH'):'-'}</td></tr>`).join('')||'<tr><td colspan="4"><div class="empty-state">ยังไม่มีข้อมูลลูกค้า หรือยังไม่มี Order ในสาขานี้</div></td></tr>'}
+        </tbody></table></div>
+      </div>`;
   }
 
   function bindPageEvents(){
     if($('#customer-search')) $('#customer-search').oninput=e=>{state.customerSearch=e.target.value;const pos=e.target.selectionStart;renderApp();const n=$('#customer-search');n.focus();n.setSelectionRange(pos,pos);};
+    document.querySelectorAll('[data-open-chat]').forEach(b=>b.onclick=()=>{state.selectedChatUserId=b.dataset.openChat;renderApp();});
+    if($('#close-chat')) $('#close-chat').onclick=()=>{state.selectedChatUserId='';renderApp();};
     document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{state.page=b.dataset.goto;renderApp();});
     if($('#product-search')) $('#product-search').oninput=e=>{state.search=e.target.value;const pos=e.target.selectionStart;renderApp();const n=$('#product-search');n.focus();n.setSelectionRange(pos,pos);};
     if($('#category-filter')) $('#category-filter').onchange=e=>{state.categoryFilter=e.target.value;renderApp();};
