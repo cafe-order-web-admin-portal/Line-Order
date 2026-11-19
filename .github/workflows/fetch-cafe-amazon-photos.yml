@@ -1,5 +1,9 @@
 name: Fetch Cafe Amazon Product Photos
 on:
+  push:
+    paths:
+      - '.github/workflows/fetch-cafe-amazon-photos.yml'
+      - 'scripts/fetch_cafe_amazon_photos.py'
   workflow_dispatch:
     inputs:
       menu_url:
@@ -20,7 +24,7 @@ jobs:
         run: pip install requests beautifulsoup4
       - name: Fetch and name product photos
         env:
-          MENU_URL: ${{ inputs.menu_url }}
+          MENU_URL: ${{ inputs.menu_url || 'https://www.wongnai.com/delivery/businesses/372165Fm/order' }}
         run: python scripts/fetch_cafe_amazon_photos.py
       - uses: actions/upload-artifact@v4
         with:
