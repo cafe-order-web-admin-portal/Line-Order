@@ -600,6 +600,232 @@ main>.section-title:first-of-type{margin-top:2px!important}
   .menu-header .menu-search{padding-left:15.5%!important}
 }
 
+
+/* Reference layout pass: leafy upper header + green search band + white menu canvas. */
+:root{
+ --amz-forest:#06472f;
+ --amz-forest-deep:#033d29;
+ --amz-coral:#ed6253;
+ --amz-coral-deep:#df5749;
+ --amz-white:#fff;
+ --amz-main:#fbfbfa;
+}
+html,body{background:var(--amz-main)!important}
+body{padding-bottom:calc(88px + env(safe-area-inset-bottom))!important}
+.menu-header{
+ position:relative!important;display:block!important;isolation:isolate!important;overflow:hidden!important;
+ width:100%!important;max-width:100%!important;
+ aspect-ratio:1068 / 460!important;height:auto!important;min-height:0!important;
+ margin:0!important;padding:0!important;border:0!important;border-radius:0!important;
+ background:linear-gradient(180deg,#064b32 0%,#06472f 100%)!important;
+ box-shadow:none!important;
+}
+/* The upper inset card is the only leafy surface; the search band remains solid forest green. */
+.menu-header::before{
+ content:"";position:absolute;z-index:0;
+ left:2.2%;right:2.2%;top:5.2%;height:51.5%;
+ border-radius:14px 14px 18px 18px;
+ background:
+  linear-gradient(90deg,rgba(3,58,39,.28),rgba(2,58,38,.15)),
+  url('./assets/cafe-amazon-leaf-bg.webp?v=20261119-2') left center/cover no-repeat;
+ border:1px solid rgba(255,255,255,.08);
+ border-bottom:2px solid rgba(219,239,224,.48);
+ box-shadow:0 4px 9px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.08);
+ pointer-events:none;
+}
+.menu-header .top{position:absolute!important;inset:0!important;display:block!important;z-index:2!important}
+.menu-header .brand-side{
+ position:absolute!important;left:13.2%!important;top:13.5%!important;
+ display:flex!important;align-items:center!important;gap:clamp(9px,3.5vw,22px)!important;
+ width:74%!important;min-width:0!important;z-index:3!important;
+}
+.menu-header .logo{
+ display:grid!important;place-items:center!important;
+ flex:0 0 clamp(42px,12vw,66px)!important;
+ width:clamp(42px,12vw,66px)!important;height:clamp(42px,12vw,66px)!important;
+ padding:0!important;border:0!important;border-radius:0!important;
+ background:transparent!important;box-shadow:none!important;color:#fff!important;
+}
+.menu-header .logo svg{display:block!important;width:100%!important;height:100%!important}
+.menu-header .brand-copy{display:block!important;min-width:0!important}
+.menu-header .brand{
+ display:block!important;margin:0!important;color:#fff!important;
+ font:700 clamp(17px,4.8vw,29px)/1.18 'IBM Plex Sans Thai',sans-serif!important;
+ letter-spacing:-.25px!important;text-shadow:0 1px 2px rgba(0,0,0,.12)!important;
+}
+.menu-header .sub{display:none!important}
+.menu-header .branch{
+ display:block!important;margin:3px 0 0!important;padding:0!important;
+ border:0!important;border-radius:0!important;background:transparent!important;
+ color:rgba(255,255,255,.93)!important;
+ font:500 clamp(10px,3vw,17px)/1.22 'IBM Plex Sans Thai',sans-serif!important;
+ white-space:nowrap!important;box-shadow:none!important;
+}
+.menu-header .header-refresh{
+ position:absolute!important;left:84.3%!important;top:27%!important;
+ width:10%!important;height:22%!important;min-width:0!important;
+ padding:0!important;border:0!important;border-radius:50%!important;
+ background:transparent!important;box-shadow:none!important;color:#fff!important;
+ display:grid!important;place-items:center!important;z-index:4!important;
+}
+.menu-header .header-refresh svg{
+ display:block!important;opacity:1!important;width:68%!important;height:68%!important;
+ fill:none!important;stroke:currentColor!important;stroke-width:2.1!important;
+ stroke-linecap:round!important;stroke-linejoin:round!important;
+}
+.menu-header .menu-search{
+ position:absolute!important;left:5.1%!important;top:66.5%!important;
+ width:76.9%!important;height:26.5%!important;margin:0!important;
+ padding:0 4.2% 0 12.5%!important;display:flex!important;align-items:center!important;
+ gap:7px!important;border:0!important;border-radius:999px!important;
+ background:#fff!important;color:#28352d!important;
+ box-shadow:0 2px 4px rgba(0,0,0,.12)!important;z-index:4!important;
+}
+.menu-header .menu-search .search-icon{display:none!important}
+.menu-header .menu-search .search-icon-svg{
+ position:absolute!important;left:4.5%!important;top:50%!important;
+ transform:translateY(-50%)!important;width:clamp(17px,4.8vw,26px)!important;
+ height:clamp(17px,4.8vw,26px)!important;display:block!important;
+ color:#222!important;fill:none!important;stroke:currentColor!important;stroke-width:2.1!important;
+}
+.menu-header .menu-search input{
+ display:block!important;width:100%!important;height:100%!important;min-width:0!important;
+ padding:0!important;border:0!important;outline:0!important;background:transparent!important;
+ color:#303630!important;font:500 clamp(11px,3.1vw,16px)/1.2 'IBM Plex Sans Thai',sans-serif!important;
+ box-shadow:none!important;
+}
+.menu-header .menu-search input::placeholder{color:#68706a!important;opacity:1!important}
+.menu-header .header-filter{
+ position:absolute!important;left:84.2%!important;top:66.5%!important;
+ width:12.1%!important;height:26.5%!important;min-width:0!important;
+ display:grid!important;place-items:center!important;padding:0!important;
+ border:0!important;border-radius:14px!important;background:#f4f4f1!important;
+ color:#252a27!important;box-shadow:0 2px 4px rgba(0,0,0,.12)!important;z-index:4!important;
+}
+.menu-header .header-filter svg{display:block!important;width:57%!important;height:57%!important;fill:none!important;stroke:currentColor!important;stroke-width:2.2!important;stroke-linecap:round!important}
+@media(max-width:380px){
+ .menu-header .brand-side{left:12.5%!important;gap:9px!important}
+ .menu-header .logo{flex-basis:40px!important;width:40px!important;height:40px!important}
+ .menu-header .brand{font-size:16px!important}
+ .menu-header .branch{font-size:10px!important}
+ .menu-header .header-filter{border-radius:11px!important}
+}
+/* White shopping area and rounded category pills, matching the supplied reference. */
+main{
+ max-width:760px!important;margin:0 auto!important;
+ padding:12px 14px calc(18px + env(safe-area-inset-bottom))!important;
+ background:var(--amz-main)!important;
+}
+.status{display:none!important}
+.status.is-error{display:block!important;margin:5px 2px 9px!important;padding:9px 11px!important;border-radius:10px!important;background:#fff0ed!important;color:#b43f32!important;font-size:12px!important}
+.receipt:empty{display:none!important}
+.chips{
+ display:flex!important;flex-wrap:nowrap!important;gap:8px!important;
+ overflow-x:auto!important;overflow-y:hidden!important;white-space:nowrap!important;
+ margin:0 -2px!important;padding:3px 2px 7px!important;
+ scrollbar-width:none!important;-webkit-overflow-scrolling:touch;
+}
+.chips::-webkit-scrollbar{display:none!important}
+.chip{
+ flex:0 0 auto!important;min-height:35px!important;padding:7px 17px!important;
+ border:0!important;border-radius:22px!important;background:#efefed!important;
+ color:#242824!important;font:600 12px/1.2 'IBM Plex Sans Thai',sans-serif!important;
+ box-shadow:none!important;
+}
+.chip.active{
+ background:var(--amz-coral)!important;color:#fff!important;
+ border:0!important;box-shadow:0 2px 5px rgba(237,98,83,.18)!important;
+}
+.section-title{
+ display:flex!important;align-items:center!important;gap:8px!important;
+ margin:18px 0 10px!important;color:#161b18!important;
+ font:700 18px/1.3 'IBM Plex Sans Thai',sans-serif!important;
+}
+.section-title::after{
+ content:"";display:block;flex:1 1 auto;height:2px;min-width:20px;
+ background:linear-gradient(90deg,#ee786b,rgba(238,120,107,.08));
+ margin-left:7px;
+}
+.grid{
+ display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;
+ gap:10px!important;align-items:stretch!important;
+}
+.card{
+ display:flex!important;flex-direction:column!important;align-items:stretch!important;
+ min-width:0!important;overflow:hidden!important;border:1px solid #eeeee9!important;
+ border-radius:16px!important;background:#fff!important;
+ box-shadow:0 3px 10px rgba(40,48,40,.075)!important;
+}
+.card .photo{
+ height:clamp(110px,30vw,150px)!important;min-height:110px!important;
+ flex:0 0 auto!important;background:#fff!important;
+ display:flex!important;align-items:center!important;justify-content:center!important;
+ padding:7px!important;overflow:hidden!important;position:relative!important;
+}
+.card .photo::before,.card .photo::after{display:none!important;content:none!important}
+.card .photo .photo-plate{display:none!important}
+.card .photo img,.card .photo img.photo-cutout,.card .photo img.photo-photo{
+ position:relative!important;z-index:2!important;display:block!important;
+ visibility:visible!important;opacity:1!important;width:100%!important;height:100%!important;
+ object-fit:contain!important;object-position:center center!important;
+ background:transparent!important;mix-blend-mode:normal!important;
+ filter:none!important;
+}
+.card .info{
+ box-sizing:border-box!important;width:100%!important;display:flex!important;
+ flex:1 1 auto!important;flex-direction:column!important;align-items:stretch!important;
+ gap:4px!important;min-width:0!important;padding:8px 10px 10px!important;background:#fff!important;
+}
+.card .name{
+ display:-webkit-box!important;min-height:1.45em!important;max-height:2.75em!important;
+ overflow:hidden!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;
+ text-align:left!important;color:#171b18!important;
+ font:700 13px/1.32 'IBM Plex Sans Thai',sans-serif!important;
+}
+.card .row{
+ display:flex!important;flex-direction:row!important;align-items:center!important;
+ justify-content:space-between!important;gap:6px!important;
+ width:100%!important;margin-top:auto!important;padding-top:5px!important;
+}
+.card .price{
+ display:block!important;flex:0 1 auto!important;min-width:0!important;
+ padding:0!important;border:0!important;border-radius:0!important;
+ background:transparent!important;color:#141815!important;
+ font:800 clamp(13px,3.6vw,17px)/1.2 'IBM Plex Sans Thai',sans-serif!important;
+ white-space:nowrap!important;
+}
+.card .row .add{
+ display:inline-flex!important;align-items:center!important;justify-content:center!important;
+ flex:0 0 auto!important;width:auto!important;min-width:83px!important;min-height:36px!important;
+ padding:7px 13px!important;border:0!important;border-radius:22px!important;
+ background:var(--amz-coral)!important;color:#fff!important;
+ font:700 12px/1.2 'IBM Plex Sans Thai',sans-serif!important;
+ opacity:1!important;visibility:visible!important;white-space:nowrap!important;
+ box-shadow:0 2px 5px rgba(237,98,83,.20)!important;
+ -webkit-appearance:none!important;appearance:none!important;
+}
+.card .row .add:active{background:var(--amz-coral-deep)!important;transform:scale(.98)}
+.card .row .add:disabled{background:#bbc2bd!important;color:#fff!important;box-shadow:none!important}
+.card .badge{align-self:flex-start!important;margin-top:3px!important;font-size:9px!important}
+.empty{background:#fff!important}
+@media(min-width:560px){
+ main{padding-left:18px!important;padding-right:18px!important}
+ .grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+ .card .photo{height:150px!important}
+}
+@media(max-width:380px){
+ main{padding-left:10px!important;padding-right:10px!important}
+ .chips{gap:6px!important}
+ .chip{padding:7px 13px!important;font-size:11px!important}
+ .section-title{font-size:16px!important}
+ .grid{gap:8px!important}
+ .card .photo{height:clamp(104px,30vw,120px)!important;min-height:104px!important}
+ .card .info{padding:7px 8px 9px!important}
+ .card .name{font-size:11px!important}
+ .card .row .add{min-width:76px!important;padding:7px 9px!important;font-size:11px!important}
+ .card .price{font-size:13px!important}
+}
+
 </style>
 </head>
 <body>
@@ -612,12 +838,13 @@ main>.section-title:first-of-type{margin-top:2px!important}
     <button class="header-refresh" id="refresh-button" type="button" aria-label="รีเฟรชเมนู" title="รีเฟรชเมนู"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M19.1 12A7.5 7.5 0 0 0 6.3 6.5L4 9"/><path d="M4 17v-5h5"/><path d="M4.9 12A7.5 7.5 0 0 0 17.7 17.5L20 15"/></svg></button>
   </div>
   <label class="menu-search" for="menu-search"><svg class="search-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.7"></circle><path d="m16 16 5 5"></path></svg><input id="menu-search" type="search" placeholder="ค้นหาเมนูที่ชอบ" autocomplete="off" aria-label="ค้นหาเมนู"></label>
+  <button class="header-filter" id="menu-filter-toggle" type="button" aria-label="ไปยังตัวกรองหมวดหมู่" title="ตัวกรองหมวดหมู่"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2.3" fill="#fff" stroke="currentColor"/><circle cx="15" cy="12" r="2.3" fill="#fff" stroke="currentColor"/><circle cx="8" cy="18" r="2.3" fill="#fff" stroke="currentColor"/></svg></button>
 </header>
 <main>
   <p class="status" id="status">กำลังเชื่อมต่อระบบ…</p>
   <div class="receipt" id="receipt"></div>
   <div class="section-title">เลือกหมวดหมู่</div><div class="chips" id="categories"><button class="chip active" data-cat="all">ทั้งหมด</button></div>
-  <div class="section-title">👑 เมนูยอดนิยม</div><div class="grid" id="products"><div class="empty">กำลังโหลดเมนู…</div></div>
+  <div class="section-title">🔥 เมนูยอดนิยม</div><div class="grid" id="products"><div class="empty">กำลังโหลดเมนู…</div></div>
 </main>
 <div class="location-onboarding" id="location-onboarding" role="dialog" aria-modal="true" aria-labelledby="location-onboarding-title"><div class="location-onboarding-card"><div class="location-onboarding-icon">📍</div><h2 id="location-onboarding-title">อนุญาตให้ร้านใช้ตำแหน่งของคุณไหม?</h2><p>ใช้ตำแหน่งเพื่อช่วยให้พนักงานติดตามการรับสินค้าและประสานงานออเดอร์ได้สะดวกขึ้น ระบบจะเริ่มแชร์ตำแหน่งเมื่อมีคำสั่งซื้อที่ยังดำเนินการอยู่เท่านั้น</p><div class="location-onboarding-actions"><button class="location-allow" id="location-allow">อนุญาตตำแหน่ง</button><button class="location-later" id="location-later">ไว้ภายหลัง</button></div><p class="location-onboarding-foot">คุณสามารถเลือกไม่อนุญาตได้ และยังสั่งเครื่องดื่มได้ตามปกติ</p></div></div><div class="cartbar">
   <div class="cart-summary">
@@ -1019,6 +1246,7 @@ async function loadMyOrders(){
 }
 $('categories').addEventListener('click',e=>{const b=e.target.closest('[data-cat]');if(!b)return;activeCategory=b.dataset.cat;document.querySelectorAll('.chip').forEach(x=>x.classList.toggle('active',x===b));renderProducts();});
 $('menu-search').addEventListener('input',renderProducts);
+$('menu-filter-toggle').addEventListener('click',()=>{const target=$('categories');if(target){target.scrollIntoView({behavior:'smooth',block:'center'});target.classList.add('filter-focus');setTimeout(()=>target.classList.remove('filter-focus'),850);}});
 $('products').addEventListener('click',e=>{const b=e.target.closest('[data-add]');if(!b||b.disabled)return;const p=allProducts.find(x=>String(x.id)===b.dataset.add);if(p?.can_order)openProductOptions(p);});
 $('add-configured').onclick=()=>{const ids=collectOptions();if(ids!==null)addConfiguredProduct(ids);};
 $('checkout').onclick=()=>{renderCart();showModal('cart-modal');};
