@@ -90,6 +90,19 @@ main{padding:13px 13px 18px}
 @media(max-width:380px){.grid{gap:8px}.photo{height:clamp(122px,38vw,145px);min-height:122px}.info{padding:9px 8px 10px}.add{min-width:74px;padding:8px 9px!important}.checkout{min-width:120px}}
 @media(min-width:600px){.photo{height:170px;min-height:170px}.photo-plate{height:50%}}
 
+
+/* Use the prepared café-table scene behind the existing official menu images. */
+:root{--menu-scene-image:none}
+.photo{
+ background-image:var(--menu-scene-image),linear-gradient(180deg,#d8e3d4 0%,#e8ecdf 56%,#b68a63 57%,#d2ad87 100%)!important;
+ background-size:cover,cover!important;
+ background-position:center 62%,center!important;
+}
+.photo::before,.photo::after{content:none!important;display:none!important}
+.photo img.photo-cutout{mix-blend-mode:normal!important;filter:drop-shadow(0 8px 8px rgba(28,35,25,.2))!important}
+.photo img.photo-photo{mix-blend-mode:multiply!important;filter:drop-shadow(0 7px 7px rgba(38,29,20,.17))!important}
+.photo-plate{bottom:5%;height:50%;background:radial-gradient(ellipse at 50% 45%,#fffefa 0 57%,#e5e1d8 59% 63%,#fffefa 66% 74%,rgba(255,255,255,.1) 75%)!important;box-shadow:0 8px 14px rgba(45,32,18,.18),inset 0 2px 5px rgba(255,255,255,.95)!important}
+
 </style>
 </head>
 <body>
@@ -293,7 +306,7 @@ function renderProducts(){
     const code=String(p.product_code||'');
     const isFood=code.startsWith('CA-BAK')&&!/(น้ำ|เครื่องดื่ม)/.test(String(p.product_name||''));
     const photoClass=isFood?'photo-food':'photo-drink';
-    return '<article class="card"><div class="photo '+photoClass+'">'+(isFood?'<span class="photo-plate" aria-hidden="true"></span>':'')+(p.image_url?'<img loading="lazy" src="'+esc(p.image_url)+'" alt="'+esc(p.product_name)+'">':'<span class="photo-fallback" aria-hidden="true">☕</span>')+'</div><div class="info"><div class="name">'+esc(p.product_name)+'</div><div class="row"><span class="price">'+(p.price>0?money(p.price):'รอระบุราคา')+'</span><button class="add" data-add="'+esc(p.id)+'" '+(p.can_order?'':'disabled')+'>'+(p.can_order?'+ เพิ่ม':'ยังไม่เปิดขาย')+'</button></div>'+(p.can_order?'':'<span class="badge">รอเปิดสถานะขายของสาขา</span>')+'</div></article>';
+    return '<article class="card"><div class="photo '+photoClass+'">'+(isFood?'<span class="photo-plate" aria-hidden="true"></span>':'')+(p.image_url?'<img loading="lazy" class="'+(/\\.(png|webp|avif)(?:\\?|$)/i.test(p.image_url)?'photo-cutout':'photo-photo')+'" src="'+esc(p.image_url)+'" alt="'+esc(p.product_name)+'">':'<span class="photo-fallback" aria-hidden="true">☕</span>')+'</div><div class="info"><div class="name">'+esc(p.product_name)+'</div><div class="row"><span class="price">'+(p.price>0?money(p.price):'รอระบุราคา')+'</span><button class="add" data-add="'+esc(p.id)+'" '+(p.can_order?'':'disabled')+'>'+(p.can_order?'+ เพิ่ม':'ยังไม่เปิดขาย')+'</button></div>'+(p.can_order?'':'<span class="badge">รอเปิดสถานะขายของสาขา</span>')+'</div></article>';
   }).join(''):(query?'<div class="empty">ไม่พบเมนูที่ตรงกับคำค้นหา<br>ลองค้นหาด้วยชื่อเครื่องดื่มหรืออาหารอื่น</div>':'<div class="empty">ยังไม่มีสินค้าในหมวดนี้</div>');
 }
 function openProductOptions(product){
@@ -502,6 +515,18 @@ document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{if
 start();
 setInterval(()=>{if(!document.hidden&&getLineIdToken())loadMyOrders();},30000);
 
+</script>
+<script>
+/* Load one shared café tabletop photo scene without changing product records or customer URLs. */
+(async function loadCafeMenuScene(){
+  try{
+    const response=await fetch('./assets/cafe-menu-scene.jpg.b64',{cache:'force-cache'});
+    if(!response.ok)throw new Error('scene asset unavailable: '+response.status);
+    const encoded=(await response.text()).replace(/\\s/g,'');
+    if(!encoded.startsWith('/9j/'))throw new Error('scene asset is incomplete');
+    document.documentElement.style.setProperty('--menu-scene-image','url("data:image/jpeg;base64,'+encoded+'")');
+  }catch(error){console.warn('Café menu scene fallback:',error);}
+})();
 </script>
 </body>
 </html>
