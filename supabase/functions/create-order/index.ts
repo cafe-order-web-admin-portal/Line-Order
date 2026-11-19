@@ -170,10 +170,12 @@ Deno.serve(async (req: Request) => {
   const customerNameInput = typeof body.customer_name === "string" ? body.customer_name.trim() : "";
   const phone = typeof body.phone === "string" ? body.phone.trim() : "";
   const customerNote = typeof body.customer_note === "string" ? body.customer_note.trim() : "";
+  const branchCodeInput = typeof body.branch_code === "string" ? body.branch_code.trim().toUpperCase() : "";
   const rawItems = body.items;
 
   if (!idToken || idToken.length > 12_000) return response(origin, 400, { error: "line_id_token_required" });
   if (!UUID_RE.test(requestId)) return response(origin, 400, { error: "request_id_must_be_uuid" });
+  if (branchCodeInput && !/^[A-Z0-9][A-Z0-9_-]{0,31}$/.test(branchCodeInput)) return response(origin, 400, { error: "invalid_branch_code" });
   if (customerNameInput.length > 120 || phone.length > 30 || customerNote.length > 500) {
     return response(origin, 400, { error: "customer_information_too_long" });
   }
@@ -211,6 +213,29 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    const { data: activeBranches, error: branchLookupError } = await admin
+      .from("branches")
+      .select("branch_code")
+      .eq("is_active", true);
+    if (branchLookupError) {
+      console.error("Active branch lookup failed:", branchLookupError.code, branchLookupError.message);
+      return response(origin, 503, { success: false, error: "ไม่สามารถตรวจสอบสาขาที่เปิดให้บริการได้" });
+    }
+    const branchMatches = branchCodeInput
+      ? (activeBranches ?? []).filter((item: { branch_code: string }) => item.branch_code.trim().toUpperCase() === branchCodeInput)
+      : (activeBranches ?? []);
+    if (!branchCodeInput && branchMatches.length > 1) {
+      return response(origin, 409, { success: false, error: "กรุณาเลือกสาขาก่อนยืนยันคำสั่งซื้อ", code: "branch_code_required" });
+    }
+    if (branchMatches.length === 0) {
+      return response(origin, 400, { success: false, error: branchCodeInput ? "ไม่พบรหัสสาขาที่ระบุ หรือสาขาปิดให้บริการ" : "ยังไม่มีสาขาที่เปิดให้บริการ", code: "branch_not_found" });
+    }
+    if (branchMatches.length !== 1) {
+      return response(origin, 409, { success: false, error: "รหัสสาขาไม่สามารถระบุสาขาได้อย่างชัดเจน", code: "branch_code_ambiguous" });
+    }
+    const branchCode = branchMatches[0].branch_code.trim().toUpperCase();
+
     const { data, error } = await admin.rpc("create_liff_order", {
       p_request_id: requestId,
       p_line_user_id: lineClaims.sub,
@@ -218,6 +243,7 @@ Deno.serve(async (req: Request) => {
       p_phone: phone || null,
       p_customer_note: customerNote || null,
       p_items: items,
+      p_branch_code: branchCode,
     });
 
     if (error) {
@@ -256,6 +282,7 @@ Deno.serve(async (req: Request) => {
 
     return response(origin, 200, {
       ...result,
+      branch_code: branchCode,
       success: result.success === true,
       notifications: { customer: customerNotified, staff: staffNotified },
     });
