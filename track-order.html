@@ -36,7 +36,7 @@ const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{},$=id=>document.getElementById(i
 const statusInfo={pending:{label:'รอร้านยืนยัน',icon:'🕒',step:0},confirmed:{label:'ร้านยืนยันแล้ว',icon:'✅',step:0},preparing:{label:'กำลังเตรียม',icon:'☕',step:1},ready:{label:'พร้อมรับสินค้า',icon:'🎉',step:2},on_the_way:{label:'กำลังจัดส่ง',icon:'🛵',step:2},arrived:{label:'ถึงจุดหมายแล้ว',icon:'📍',step:2},completed:{label:'รับสินค้าแล้ว',icon:'💚',step:3},cancelled:{label:'ยกเลิกคำสั่งซื้อ',icon:'❌',step:-1}};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});
-let idToken=null,loading=false,locationWatchId=null,activeLocationOrderId=null,locationSending=false,lastLocationSentAt=0,lastSentLocation=null;
+let idToken=null,loading=false,locationWatchId=null,activeLocationOrderId=null,locationSending=false,lastLocationSentAt=0,lastSentLocation=null,locationHeartbeatTimer=null;
 async function getToken(){
  const cached=(()=>{try{return JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null')}catch(_){return null}})();
  if(cached?.idToken&&Number(cached.expiresAt)>Date.now()+60000)return cached.idToken;
@@ -56,13 +56,27 @@ function metersBetween(a,b){
  const x=Math.sin(d1/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(d2/2)**2;
  return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
+async function sendHeartbeatLocation(orderId){
+ if(document.hidden||activeLocationOrderId!==orderId||locationSending||!navigator.geolocation)return;
+ locationSending=true;
+ try{
+  const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:20000,maximumAge:5000}));
+  await sendLocation('update',orderId,pos);
+  lastSentLocation={latitude:pos.coords.latitude,longitude:pos.coords.longitude};lastLocationSentAt=Date.now();
+ }catch(e){console.warn('GPS heartbeat:',e.message);}
+ finally{locationSending=false;}
+}
+function startLocationHeartbeat(orderId){
+ if(locationHeartbeatTimer)clearInterval(locationHeartbeatTimer);
+ locationHeartbeatTimer=setInterval(()=>sendHeartbeatLocation(orderId),30000);
+}
 async function resumeLocationSharing(orders){
  const active=(orders||[]).find(o=>o.location_share?.is_sharing&&!['completed','cancelled'].includes(o.order_status));
  if(!active){if(locationWatchId!==null&&navigator.geolocation)navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;activeLocationOrderId=null;lastSentLocation=null;lastLocationSentAt=0;return;}
  if(!navigator.geolocation)return;
  if(activeLocationOrderId===active.id&&locationWatchId!==null)return;
  if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);
- activeLocationOrderId=active.id;locationSending=false;lastSentLocation=null;lastLocationSentAt=0;
+ activeLocationOrderId=active.id;locationSending=false;lastSentLocation=null;lastLocationSentAt=0;startLocationHeartbeat(active.id);
  try{
   const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:20000,maximumAge:10000}));
   await sendLocation('update',active.id,pos);
