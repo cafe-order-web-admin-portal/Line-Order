@@ -125,6 +125,11 @@ async function start(){
  if(!db){setStatus('ไม่พบการตั้งค่า Supabase — ตรวจสอบ assets/config.js');$('products').innerHTML='<div class="empty">ยังเชื่อมต่อฐานข้อมูลไม่ได้</div>';return;}
  try{setStatus('กำลังเข้าสู่ระบบ LINE…');const session=await establishLineSession();if(!session)return;if(profile?.displayName)$('customer-name').value=profile.displayName;}
  catch(e){console.error('LINE Login:',e);setStatus(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ');$('products').innerHTML='<div class="empty">'+esc(e.message||'เข้าสู่ระบบ LINE ไม่สำเร็จ')+'<br><button class="primary" style="margin-top:12px" onclick="location.reload()">ลองอีกครั้ง</button></div>';return;}
+ const returnParam=new URLSearchParams(location.search).get('return');
+ if(returnParam){
+  try{const target=new URL(returnParam);if(target.origin===location.origin&&target.pathname.endsWith('/web-order.html')){location.replace(target.href);return;}}
+  catch(error){console.warn('Invalid external return URL:',error);}
+ }
  await requestLocationOnFirstLogin();
  await loadMenu();
 }
