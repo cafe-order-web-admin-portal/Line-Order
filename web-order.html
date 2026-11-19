@@ -200,7 +200,6 @@ async function loadMenu(branchCodeOverride=''){
   selectedUrl.searchParams.set('branch',branch.branch_code);
   history.replaceState({},'',selectedUrl.toString());
   const [catRes,linkRes]=await Promise.all([
-  const [catRes,linkRes]=await Promise.all([
     db.from('categories').select('id,category_name,sort_order,is_active').eq('is_active',true).order('sort_order',{ascending:true}),
     db.from('branch_products').select('product_id,price,is_available').eq('branch_id',branch.id)
   ]);
