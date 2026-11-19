@@ -30,6 +30,8 @@
     return db.auth.verifyOtp({ token_hash: tokenHash, type: 'magiclink' });
   }).then(function (r) {
     if (r.error) throw r.error;
+    // One-time, tab-scoped proof that this session came through the CMS SSO handoff.
+    try { sessionStorage.setItem('ca_cms_sso_verified_at', String(Date.now())); } catch (_) {}
     location.reload();
   }).catch(function (e) {
     st.remove(); window.CAFE_SSO_PENDING = false;
