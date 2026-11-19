@@ -127,7 +127,7 @@
         <aside class="sidebar">
           <div class="brand"><div class="brand-mark sm">A</div><div><h1>Café Amazon</h1><p>Web Admin Portal</p></div></div>
           <nav class="nav">
-            <a href="./orders.html" class="nav-link-live" aria-label="เปิดหน้าจัดการออเดอร์"><span class="ico">🛒</span><span class="nav-link-copy"><strong>จัดการออเดอร์</strong><small>LIVE ORDERS</small></span><span class="nav-live-pill">LIVE</span></a>
+            ${state.staff?.role !== 'super_admin' ? '<a href="./orders.html" class="nav-link-live" aria-label="เปิดหน้าจัดการออเดอร์"><span class="ico">🛒</span><span class="nav-link-copy"><strong>จัดการออเดอร์</strong><small>LIVE ORDERS</small></span><span class="nav-live-pill">LIVE</span></a>' : ''}
             ${navButton('dashboard','ภาพรวม','▦')}
             ${navButton('products','จัดการสินค้า','☕')}
             ${isSuper()?navButton('categories','หมวดหมู่','▤'):''}
