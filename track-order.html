@@ -31,18 +31,53 @@ button{font:500 11px 'IBM Plex Sans Thai',sans-serif;border:1px solid #dce7de;ba
 <main><div class="toolbar"><span class="hint">สถานะอัปเดตอัตโนมัติทุก 15 วินาที</span><button id="refresh">↻ รีเฟรช</button></div><div id="message">กำลังเชื่อมต่อ LINE…</div><div id="orders" class="order-list"></div></main>
 <script>
 'use strict';
-const LINE_LIFF_ID='2012679988-ORHhLD7I',LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login',TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders',LINE_SESSION_KEY='ca_line_liff_session_v1';
+const LINE_LIFF_ID='2012679988-ORHhLD7I',LINE_LOGIN_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/line-login',TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders',LOCATION_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/share-customer-location',LINE_SESSION_KEY='ca_line_liff_session_v1';
 const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{},$=id=>document.getElementById(id);
 const statusInfo={pending:{label:'รอร้านยืนยัน',icon:'🕒',step:0},confirmed:{label:'ร้านยืนยันแล้ว',icon:'✅',step:0},preparing:{label:'กำลังเตรียม',icon:'☕',step:1},ready:{label:'พร้อมรับสินค้า',icon:'🎉',step:2},on_the_way:{label:'กำลังจัดส่ง',icon:'🛵',step:2},arrived:{label:'ถึงจุดหมายแล้ว',icon:'📍',step:2},completed:{label:'รับสินค้าแล้ว',icon:'💚',step:3},cancelled:{label:'ยกเลิกคำสั่งซื้อ',icon:'❌',step:-1}};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>'฿'+Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});
-let idToken=null,loading=false;
+let idToken=null,loading=false,locationWatchId=null,activeLocationOrderId=null,locationSending=false,lastLocationSentAt=0,lastSentLocation=null;
 async function getToken(){
  const cached=(()=>{try{return JSON.parse(sessionStorage.getItem(LINE_SESSION_KEY)||'null')}catch(_){return null}})();
  if(cached?.idToken&&Number(cached.expiresAt)>Date.now()+60000)return cached.idToken;
  throw new Error('ไม่พบเซสชัน LINE กรุณาเปิดหน้าติดตามจาก Rich Menu อีกครั้ง');
 }
-function renderOrder(o){
+
+// GPS จะทำงานต่อเมื่อผู้ใช้เคยยินยอมแชร์ตำแหน่งสำหรับออเดอร์นี้แล้ว
+async function sendLocation(action,orderId,position=null){
+ const coords=position?.coords;
+ const res=await fetch(LOCATION_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,order_id:orderId,action,latitude:coords?.latitude,longitude:coords?.longitude,accuracy_m:coords?.accuracy})});
+ const data=await res.json().catch(()=>({}));
+ if(!res.ok||data.success!==true)throw new Error(data.error||'ส่งตำแหน่งไม่สำเร็จ');
+ return data;
+}
+function metersBetween(a,b){
+ if(!a||!b)return Infinity;const rad=n=>n*Math.PI/180,d1=rad(b.latitude-a.latitude),d2=rad(b.longitude-a.longitude);
+ const x=Math.sin(d1/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(d2/2)**2;
+ return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+async function resumeLocationSharing(orders){
+ const active=(orders||[]).find(o=>o.location_share?.is_sharing&&!['completed','cancelled'].includes(o.order_status));
+ if(!active||!navigator.geolocation)return;
+ if(activeLocationOrderId===active.id&&locationWatchId!==null)return;
+ if(locationWatchId!==null)navigator.geolocation.clearWatch(locationWatchId);
+ activeLocationOrderId=active.id;locationSending=false;lastSentLocation=null;lastLocationSentAt=0;
+ try{
+  const pos=await new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:20000,maximumAge:10000}));
+  await sendLocation('update',active.id,pos);
+  lastSentLocation={latitude:pos.coords.latitude,longitude:pos.coords.longitude};lastLocationSentAt=Date.now();
+  locationWatchId=navigator.geolocation.watchPosition(async next=>{
+   if(locationSending||activeLocationOrderId!==active.id)return;
+   const point={latitude:next.coords.latitude,longitude:next.coords.longitude};
+   if(Date.now()-lastLocationSentAt<20000&&metersBetween(lastSentLocation,point)<40)return;
+   locationSending=true;
+   try{await sendLocation('update',active.id,next);lastSentLocation=point;lastLocationSentAt=Date.now();}
+   catch(e){console.warn('GPS update:',e.message);}
+   finally{locationSending=false;}
+  },e=>console.warn('GPS watch:',e.message),{enableHighAccuracy:true,timeout:20000,maximumAge:5000});
+ }catch(e){console.warn('Resume GPS sharing:',e.message);}
+}
+\nfunction renderOrder(o){
  const st=statusInfo[o.order_status]||{label:o.order_status||'ไม่ทราบสถานะ',icon:'ℹ️',step:0};
  const items=(o.items||[]).map(it=>'<div>'+esc(it.product_name||'สินค้า')+' × '+Number(it.quantity||0)+(Array.isArray(it.selected_options)&&it.selected_options.length?'<small>'+esc(it.selected_options.map(x=>x.option_name||x.option_value||'').filter(Boolean).join(' · '))+'</small>':'')+'</div>').join('');
  const progress=st.step<0?'': '<div class="progress">'+[0,1,2,3].map(n=>'<i class="step '+(n<=st.step?'done':'')+'"></i>').join('')+'</div>';
@@ -56,12 +91,12 @@ async function loadOrders(){
   const res=await fetch(TRACK_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,limit:10})});
   const data=await res.json().catch(()=>({}));
   if(!res.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถโหลดคำสั่งซื้อได้');
-  const orders=data.orders||[];$('orders').innerHTML=orders.length?orders.map(renderOrder).join(''):'<div class="empty">ยังไม่พบคำสั่งซื้อของคุณ</div>';
+  const orders=data.orders||[];$('orders').innerHTML=orders.length?orders.map(renderOrder).join(''):'<div class="empty">ยังไม่พบคำสั่งซื้อของคุณ</div>';resumeLocationSharing(orders);
   $('message').textContent=orders.length?'พบ '+orders.length+' คำสั่งซื้อ':'';
  }catch(e){$('message').textContent=e.message||'เกิดข้อผิดพลาด';}
  finally{loading=false;}
 }
 $('refresh').addEventListener('click',()=>loadOrders());
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadOrders()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){loadOrders();}});window.addEventListener('pageshow',()=>{loadOrders();});
 loadOrders();setInterval(()=>{if(!document.hidden)loadOrders()},15000);
 </script></body></html>
