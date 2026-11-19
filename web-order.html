@@ -214,6 +214,118 @@ header{z-index:2!important}
 .card .photo img.photo-photo{filter:drop-shadow(0 5px 6px rgba(28,35,25,.12))!important}
 .card .photo img.photo-cutout{filter:drop-shadow(0 7px 8px rgba(28,35,25,.2))!important}
 
+
+/* FINAL FIX — checkout controls in LINE in-app browser and mobile Web Order */
+#checkout.cartbar,
+.cartbar #checkout,
+button#checkout.checkout{
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  flex:0 0 auto!important;
+  width:auto!important;
+  min-width:140px!important;
+  min-height:52px!important;
+  padding:0 22px!important;
+  margin:0!important;
+  border:0!important;
+  border-radius:14px!important;
+  background:#ef5d50!important;
+  background-image:none!important;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  font-family:'IBM Plex Sans Thai',sans-serif!important;
+  font-size:14px!important;
+  font-weight:700!important;
+  line-height:1.2!important;
+  letter-spacing:0!important;
+  text-indent:0!important;
+  opacity:1!important;
+  visibility:visible!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  box-shadow:0 5px 14px rgba(239,93,80,.25)!important;
+}
+#checkout.checkout:disabled,
+.cartbar #checkout:disabled{
+  background:#aeb8b0!important;
+  background-image:none!important;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+  box-shadow:none!important;
+}
+/* Keep label visible even if LINE's embedded browser applies a button text-fill override. */
+#checkout.checkout::after{
+  content:"ดูตะกร้า";
+  display:inline-block;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  font-size:14px!important;
+  font-weight:700!important;
+  line-height:1.2!important;
+  visibility:visible!important;
+}
+/* Sticky, high-contrast submit action in the customer cart sheet. */
+#cart-modal{
+  z-index:1100!important;
+  align-items:flex-end!important;
+}
+#cart-modal .sheet{
+  position:relative!important;
+  z-index:1101!important;
+  width:100%!important;
+  max-width:600px!important;
+  max-height:88dvh!important;
+  max-height:88vh!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain;
+  padding-bottom:calc(18px + env(safe-area-inset-bottom))!important;
+}
+#cart-modal #confirm-order{
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  position:sticky!important;
+  bottom:0!important;
+  z-index:1102!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:100%!important;
+  min-height:54px!important;
+  margin-top:16px!important;
+  padding:14px 18px!important;
+  border:0!important;
+  border-radius:14px!important;
+  background:#ef5d50!important;
+  background-image:none!important;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  font-family:'IBM Plex Sans Thai',sans-serif!important;
+  font-size:15px!important;
+  font-weight:700!important;
+  line-height:1.25!important;
+  text-indent:0!important;
+  opacity:1!important;
+  visibility:visible!important;
+  white-space:normal!important;
+  box-shadow:0 5px 14px rgba(239,93,80,.24)!important;
+}
+#cart-modal #confirm-order:disabled{
+  background:#aeb8b0!important;
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  opacity:1!important;
+  box-shadow:none!important;
+}
+@media(max-width:600px){
+  .cartbar{z-index:10!important}
+  .cartbar #checkout{min-width:132px!important;min-height:50px!important}
+  #cart-modal .sheet{border-radius:20px 20px 0 0!important}
+}
+
 </style>
 </head>
 <body>
