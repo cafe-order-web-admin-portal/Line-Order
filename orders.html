@@ -254,6 +254,66 @@
   .live-order-card .live-order-actions{margin-top:7px!important}
 }
 
+
+/* LIVE ORDERS: scroll the whole order card to reach actions */
+/* The order card itself is the scroll container. Product rows and action buttons
+   stay in one natural flow so long orders can be scrolled all the way to actions. */
+.queue-list{
+  grid-auto-rows:auto!important;
+  align-content:start!important;
+}
+.queue-list>.live-order-card{
+  height:auto!important;
+  min-height:0!important;
+  max-height:min(68vh,560px)!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch!important;
+  overscroll-behavior-y:contain;
+  touch-action:pan-y;
+  align-self:start!important;
+  display:flex!important;
+  flex-direction:column!important;
+}
+.live-order-card .order-products-list{
+  flex:0 0 auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  height:auto!important;
+  overflow:visible!important;
+  overflow-y:visible!important;
+  overflow-x:visible!important;
+  touch-action:auto!important;
+}
+.live-order-card .live-order-actions{
+  display:flex!important;
+  position:relative!important;
+  flex:0 0 auto!important;
+  margin-top:9px!important;
+  padding-bottom:3px;
+  z-index:2;
+  pointer-events:auto!important;
+}
+.live-order-card .live-order-actions button{
+  position:relative!important;
+  z-index:3;
+  pointer-events:auto!important;
+  touch-action:manipulation;
+}
+@media(max-width:800px){
+  .queue-list{
+    display:block!important;
+    max-height:min(72svh,720px)!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  .queue-list>.live-order-card{
+    max-height:min(65svh,600px)!important;
+    margin-bottom:8px;
+  }
+}
+
 </style>
 </head>
 <body>
