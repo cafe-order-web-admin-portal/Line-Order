@@ -156,11 +156,12 @@
             ${navButton('products','จัดการสินค้า','☕')}
             ${isSuper()?navButton('categories','หมวดหมู่','▤'):''}
             ${isSuper()?navButton('options','ตัวเลือกสินค้า','☷'):''}
+            ${state.staff?.role !== 'staff' ? '<div class="side-label">OPERATIONS</div>' : ''}
             ${state.staff?.role !== 'staff' ? navButton('import','Import ข้อมูล','⇧') : ''}
             ${state.staff?.role !== 'staff' ? navButton('history','ประวัติ Import','◷') : ''}
             ${state.staff?.role !== 'staff' ? navButton('customers','ข้อมูลลูกค้า','♙') : ''}
           </nav>
-          <div class="side-foot">ระบบจัดการข้อมูลสินค้าและราคาสาขา<br>Version 1.0 · Supabase</div>
+          <div class="side-foot">☕ &nbsp; ${esc(activeBranch()?.branch_name||'Café Amazon')}<br><span class="side-foot-meta">Store Management · Supabase</span></div>
         </aside>
         <main class="main">
           <header class="topbar">
