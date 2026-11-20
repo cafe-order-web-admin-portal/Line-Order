@@ -46,3 +46,6 @@ body{background:var(--ca-bg);color:var(--ca-ink)}
 :root[data-ca-theme="dark"] select,
 :root[data-ca-theme="dark"] textarea{background:#26352B;color:var(--ca-ink);border-color:var(--ca-line)}
 :root[data-ca-theme="dark"] th{background:#29392F;color:var(--ca-muted)}
+
+.ca-theme-picker{max-width:124px;min-width:96px;min-height:34px;padding:5px 8px;border:1px solid var(--ca-line);border-radius:9px;background:var(--ca-surface);color:var(--ca-ink);font:500 11px 'IBM Plex Sans Thai',sans-serif}
+@media(max-width:600px){.ca-theme-picker{max-width:105px;min-width:82px;padding:4px 5px;font-size:10px}}
