@@ -40,6 +40,6 @@
     addPicker();
     new MutationObserver(addPicker).observe(document.body,{childList:true,subtree:true});
   }
-  window.CafeAmazonTheme={themes:THEMES.slice(),get:function(){return document.documentElement.getAttribute('data-ca-theme')||'international';},set:function(name){return apply(name,true);},reset:reset};
+  window.CafeAmazonTheme={themes:THEMES.slice(),get:function(){return document.documentElement.getAttribute('data-ca-theme')||'forest';},set:function(name){return apply(name,true);},reset:reset};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
