@@ -3,14 +3,14 @@
 (function(){
   'use strict';
   var KEY='ca.unified.theme.v1';
-  var THEMES=['international','classic','forest','espresso','dark'];
-  function valid(v){return THEMES.indexOf(v)>=0?v:'international';}
+  var THEMES=['international','forest','espresso','ocean','charcoal','terracotta','dark'];
+  function valid(v){return THEMES.indexOf(v)>=0?v:'forest';}
   function read(){
     try{
       var q=new URLSearchParams(location.search).get('ca-theme');
       if(q) return valid(q);
-      return valid(localStorage.getItem(KEY)||'international');
-    }catch(_){return 'international';}
+      return valid(localStorage.getItem(KEY)||'forest');
+    }catch(_){return 'forest';}
   }
   function apply(name, persist){
     var theme=valid(name);
@@ -21,13 +21,13 @@
     window.dispatchEvent(new CustomEvent('ca:themechange',{detail:{theme:theme}}));
     return theme;
   }
-  function reset(){try{localStorage.removeItem(KEY);}catch(_){} return apply('international',false);}
+  function reset(){try{localStorage.removeItem(KEY);}catch(_){} return apply('forest',false);}
   function addPicker(){
     var host=document.querySelector('.top-actions')||document.querySelector('.header-right');
     if(!host||host.querySelector('.ca-theme-picker'))return;
     var select=document.createElement('select');
     select.className='ca-theme-picker';select.setAttribute('aria-label','เลือกธีม');
-    select.innerHTML='<option value="international">International</option><option value="classic">Classic</option><option value="forest">Forest</option><option value="espresso">Espresso</option><option value="dark">Dark</option>';
+    select.innerHTML='<option value="international">International</option><option value="forest">Forest</option><option value="espresso">Espresso</option><option value="ocean">Ocean</option><option value="charcoal">Charcoal</option><option value="terracotta">Terracotta</option><option value="dark">Dark</option>';
     select.value=window.CafeAmazonTheme.get();
     select.addEventListener('change',function(){apply(select.value,true);});
     host.insertBefore(select,host.firstChild);
