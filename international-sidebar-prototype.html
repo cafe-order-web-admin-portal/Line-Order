@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#087044">
+<title>Café Amazon — International Sidebar Interactive Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--green:#087044;--green2:#064d32;--lime:#dcebdc;--gold:#c99a45;--bg:#f4f7f4;--surface:#fff;--ink:#1d2b23;--muted:#77837b;--line:#e5ebe6;--shadow:0 10px 30px rgba(19,55,35,.07);--sidebar:264px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"DM Sans","Prompt",sans-serif}button,input{font:inherit}button{cursor:pointer}
+.shell{min-height:100vh}.sidebar{position:fixed;inset:0 auto 0 0;width:var(--sidebar);background:linear-gradient(180deg,#075c3a,#06472f);color:#fff;padding:24px 17px;display:flex;flex-direction:column;z-index:30;transition:transform .25s,width .25s;box-shadow:8px 0 30px rgba(7,58,37,.08)}
+.brand{display:flex;align-items:center;gap:12px;padding:0 10px 25px;border-bottom:1px solid rgba(255,255,255,.15)}.brand-mark{width:42px;height:42px;border-radius:14px;background:#fff;color:var(--green);display:grid;place-items:center;font:700 25px Prompt;box-shadow:0 5px 16px #002e1b55}.brand-name{font:600 17px Prompt;letter-spacing:-.3px}.brand-sub{font-size:10px;letter-spacing:1.8px;color:#b8d3c1;margin-top:3px}
+.store-switch{margin:20px 4px 17px;padding:12px;border:1px solid #ffffff26;border-radius:13px;background:#ffffff0d;display:flex;align-items:center;gap:10px}.store-icon{width:32px;height:32px;border-radius:10px;background:#ffffff20;display:grid;place-items:center}.store-switch small{display:block;color:#b7d1c0;font-size:10px}.store-switch strong{font-size:12px;font-weight:600}.chev{margin-left:auto;color:#b7d1c0}
+.nav-label{font-size:9px;letter-spacing:1.6px;color:#a8c8b5;padding:15px 12px 8px}.nav{display:grid;gap:4px}.nav-item{width:100%;border:0;background:transparent;color:#d9e8de;padding:11px 12px;border-radius:11px;display:flex;align-items:center;gap:12px;text-align:left;font-size:12px;font-weight:500;transition:.18s}.nav-item:hover{background:#ffffff12;color:white}.nav-item.active{background:#ffffffed;color:#075c3a;box-shadow:0 5px 15px #00331c30}.nav-item .ico{width:19px;text-align:center;font-size:16px}.nav-item .arrow{margin-left:auto;font-size:11px;transition:transform .2s}.nav-item.open .arrow{transform:rotate(90deg)}.subnav{display:none;margin:1px 0 5px 42px;padding-left:12px;border-left:1px solid #ffffff30;gap:2px}.subnav.show{display:grid}.subnav button{border:0;background:none;color:#bcd2c3;text-align:left;padding:8px 9px;font-size:11px;border-radius:8px}.subnav button:hover,.subnav button.selected{background:#ffffff16;color:#fff}
+.sidebar-bottom{margin-top:auto}.help-card{padding:13px;border:1px solid #ffffff25;background:#ffffff0c;border-radius:13px;margin:15px 4px}.help-card strong{font-size:11px}.help-card p{font-size:10px;color:#b7d1c0;line-height:1.5;margin:5px 0 10px}.help-card button{border:0;border-radius:8px;background:#fff;color:#075c3a;padding:7px 10px;font-size:10px;font-weight:700}.profile{display:flex;align-items:center;gap:10px;padding:15px 7px 0;border-top:1px solid #ffffff24}.avatar{width:34px;height:34px;border-radius:50%;background:#e6c58b;color:#553b1b;display:grid;place-items:center;font-size:11px;font-weight:700}.profile strong{font-size:11px;display:block}.profile small{font-size:9px;color:#b7d1c0}.profile .more{margin-left:auto;color:#c9ddcf}
+.main{margin-left:var(--sidebar);min-height:100vh;transition:margin .25s}.topbar{height:76px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 32px;gap:18px;position:sticky;top:0;z-index:15}.icon-btn{width:36px;height:36px;border:1px solid var(--line);background:#fff;border-radius:10px;color:#536258;display:grid;place-items:center}.crumb{font-size:11px;color:var(--muted)}.crumb b{color:var(--ink);font-weight:600}.top-actions{margin-left:auto;display:flex;align-items:center;gap:11px}.search{width:210px;position:relative}.search input{width:100%;border:1px solid var(--line);background:#f8faf8;border-radius:10px;padding:10px 12px 10px 34px;font-size:11px;outline:none}.search span{position:absolute;left:12px;top:9px;color:#89958c}.circle-btn{width:35px;height:35px;border:1px solid var(--line);border-radius:10px;background:white;color:#647168;position:relative}.dot{position:absolute;right:7px;top:6px;width:6px;height:6px;background:#e28a52;border:1px solid white;border-radius:50%}
+.content{max-width:1440px;margin:0 auto;padding:30px 32px 45px}.eyebrow{font-size:9px;letter-spacing:1.8px;color:var(--green);font-weight:700}.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin:7px 0 23px}.page-head h1{font:600 25px Prompt;margin:0;letter-spacing:-.5px}.page-head p{font-size:11px;color:var(--muted);margin:6px 0 0}.date-chip{background:#fff;border:1px solid var(--line);padding:9px 13px;border-radius:10px;color:#5d6c62;font-size:10px}
+.welcome{background:linear-gradient(110deg,#075b39,#0b7548);color:#fff;border-radius:18px;padding:24px 27px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden;box-shadow:var(--shadow)}.welcome:after{content:"";position:absolute;width:250px;height:250px;border:1px solid #ffffff20;border-radius:50%;right:80px;top:-145px;box-shadow:0 0 0 28px #ffffff08,0 0 0 58px #ffffff06}.welcome small{color:#c6dfcf;font-size:10px;letter-spacing:1px}.welcome h2{font:500 20px Prompt;margin:7px 0}.welcome p{font-size:11px;color:#d5e8dc;margin:0}.welcome .badge{position:relative;z-index:1;border:1px solid #ffffff42;background:#ffffff16;padding:10px 13px;border-radius:11px;font-size:10px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:19px 0}.card{background:var(--surface);border:1px solid var(--line);border-radius:15px;box-shadow:var(--shadow)}.kpi{padding:17px 18px}.kpi-top{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:10px}.kpi-icon{width:31px;height:31px;border-radius:10px;background:#eaf4ed;color:var(--green);display:grid;place-items:center;font-size:15px}.kpi-value{font:600 23px Prompt;margin:11px 0 4px}.kpi-foot{font-size:9px;color:var(--muted)}.up{color:#278454;font-weight:700}
+.grid{display:grid;grid-template-columns:1.55fr 1fr;gap:15px}.panel{padding:19px}.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:17px}.panel-head h3{font:600 13px Prompt;margin:0}.panel-head span{font-size:9px;color:var(--muted)}.bars{height:172px;display:flex;align-items:flex-end;gap:13px;padding:5px 5px 0;border-bottom:1px solid var(--line)}.bar-group{flex:1;display:flex;align-items:center;justify-content:flex-end;flex-direction:column;height:100%;gap:7px}.bar{width:min(30px,75%);background:#cfe3d4;border-radius:6px 6px 2px 2px;position:relative;min-height:8px}.bar.active{background:linear-gradient(180deg,#1b8b59,#075b39)}.bar-label{font-size:9px;color:var(--muted)}.legend{display:flex;gap:14px;margin-top:13px;font-size:9px;color:var(--muted)}.legend i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:5px}
+.activity{display:grid;gap:14px}.activity-row{display:flex;gap:10px;align-items:flex-start}.activity-icon{width:30px;height:30px;border-radius:9px;background:#edf5ef;color:var(--green);display:grid;place-items:center;font-size:13px;flex-shrink:0}.activity-row strong{font-size:10px;display:block;margin:1px 0 3px}.activity-row small{font-size:9px;color:var(--muted)}.activity-row time{margin-left:auto;font-size:9px;color:#9aa59d;white-space:nowrap}
+.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:15px}.quick button{border:1px solid var(--line);background:#fff;border-radius:13px;padding:14px;text-align:left;color:var(--ink);transition:.2s}.quick button:hover{border-color:#a8cdb5;transform:translateY(-2px)}.quick b{display:block;font-size:10px;margin:7px 0 3px}.quick small{font-size:9px;color:var(--muted)}.quick .qicon{font-size:17px;color:var(--green)}
+.toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,20px);background:#183d2b;color:white;padding:11px 16px;border-radius:10px;font-size:11px;opacity:0;pointer-events:none;transition:.25s;z-index:60}.toast.show{opacity:1;transform:translate(-50%,0)}.mobile-overlay{display:none}
+.collapsed .sidebar{width:78px;padding-inline:12px}.collapsed .brand{padding-inline:5px}.collapsed .brand-name,.collapsed .brand-sub,.collapsed .store-switch div:not(.store-icon),.collapsed .store-switch .chev,.collapsed .nav-label,.collapsed .nav-item .label,.collapsed .nav-item .arrow,.collapsed .subnav,.collapsed .help-card,.collapsed .profile div:not(.avatar),.collapsed .profile .more{display:none}.collapsed .store-switch{justify-content:center;padding:9px}.collapsed .nav-item{justify-content:center;padding:12px 5px}.collapsed .nav-item .ico{font-size:17px}.collapsed .profile{justify-content:center}.collapsed .main{margin-left:78px}
+@media(max-width:1050px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.search{width:170px}}
+@media(max-width:720px){:root{--sidebar:264px}.sidebar{transform:translateX(-105%);width:var(--sidebar)!important}.mobile-open .sidebar{transform:translateX(0)}.main,.collapsed .main{margin-left:0}.mobile-overlay{display:block;position:fixed;inset:0;background:#10281b80;z-index:25;opacity:0;pointer-events:none;transition:.2s}.mobile-open .mobile-overlay{opacity:1;pointer-events:auto}.topbar{height:64px;padding:0 15px}.crumb{display:none}.search{width:min(42vw,180px)}.content{padding:22px 15px 35px}.page-head{align-items:flex-start;gap:12px}.page-head h1{font-size:21px}.date-chip{font-size:9px;white-space:nowrap}.welcome{padding:20px;align-items:flex-start}.welcome h2{font-size:17px}.welcome .badge{display:none}.kpis{gap:9px}.kpi{padding:13px}.kpi-value{font-size:20px}.quick{grid-template-columns:1fr}.quick button{display:flex;align-items:center;gap:12px}.quick b{margin:0 0 3px}.panel{padding:15px}.bars{gap:7px}}
+@media(max-width:390px){.top-actions{gap:6px}.circle-btn{width:32px;height:32px}.search input{padding-left:29px}.welcome p{max-width:230px}.kpi-foot{font-size:8px}}
+</style>
+</head>
+<body>
+<div class="shell" id="shell">
+<aside class="sidebar">
+  <div class="brand"><div class="brand-mark">A</div><div><div class="brand-name">Café Amazon</div><div class="brand-sub">INTERNATIONAL PORTAL</div></div></div>
+  <button class="store-switch" id="storeSwitch"><div class="store-icon">⌂</div><div><small>ACTIVE WORKSPACE</small><strong>Store Operations</strong></div><span class="chev">⌄</span></button>
+  <div class="nav-label">WORKSPACE</div>
+  <nav class="nav">
+    <button class="nav-item active" data-page="Overview"><span class="ico">▦</span><span class="label">Overview</span></button>
+    <button class="nav-item" data-page="Orders"><span class="ico">▤</span><span class="label">Orders</span></button>
+    <button class="nav-item" data-page="Customers"><span class="ico">♙</span><span class="label">Customers</span></button>
+    <button class="nav-item" data-page="Products"><span class="ico">▧</span><span class="label">Products</span></button>
+    <button class="nav-item" data-page="Inventory"><span class="ico">▥</span><span class="label">Inventory</span></button>
+    <button class="nav-item has-sub" id="reportsToggle"><span class="ico">▨</span><span class="label">Reports & Analytics</span><span class="arrow">›</span></button>
+    <div class="subnav" id="reportsSub"><button data-page="Sales Report">Sales Report</button><button data-page="Product Performance">Product Performance</button><button data-page="Customer Insights">Customer Insights</button></div>
+  </nav>
+  <div class="nav-label">MANAGEMENT</div>
+  <nav class="nav">
+    <button class="nav-item" data-page="Staff"><span class="ico">♧</span><span class="label">Staff Management</span></button>
+    <button class="nav-item" data-page="Promotions"><span class="ico">✧</span><span class="label">Promotions</span></button>
+    <button class="nav-item" data-page="Settings"><span class="ico">⚙</span><span class="label">Settings</span></button>
+  </nav>
+  <div class="sidebar-bottom">
+    <div class="help-card"><strong>Need a hand?</strong><p>Explore guides and support for your store operations.</p><button id="helpBtn">Visit Help Centre ↗</button></div>
+    <div class="profile"><div class="avatar">PA</div><div><strong>Portal Admin</strong><small>Administrator</small></div><span class="more">•••</span></div>
+  </div>
+</aside>
+<div class="mobile-overlay" id="overlay"></div>
+<main class="main">
+<header class="topbar"><button class="icon-btn" id="menuBtn" aria-label="Toggle sidebar">☰</button><div class="crumb">Workspace&nbsp; / &nbsp;<b id="crumbPage">Overview</b></div>
+<div class="top-actions"><label class="search"><span>⌕</span><input id="searchInput" placeholder="Search anything..."></label><button class="circle-btn" id="languageBtn" title="Switch language">EN</button><button class="circle-btn" id="themeBtn" title="Switch appearance">◐</button><button class="circle-btn" id="noticeBtn" title="Notifications">♧<i class="dot"></i></button></div></header>
+<section class="content">
+<div class="eyebrow">MONDAY, 20 NOVEMBER 2026</div>
+<div class="page-head"><div><h1 id="pageTitle">Good afternoon, Admin <span style="font-size:20px">✦</span></h1><p>Here’s what’s happening across your store today.</p></div><div class="date-chip">▦ &nbsp; 20 Nov 2026&nbsp;⌄</div></div>
+<div class="welcome"><div><small>CAFÉ AMAZON · STORE OPERATIONS</small><h2>Your business at a glance.</h2><p>Monitor performance, manage daily operations and make smarter decisions.</p></div><div class="badge">● &nbsp; All systems operational</div></div>
+<div class="kpis">
+ <article class="card kpi"><div class="kpi-top">Total Revenue <span class="kpi-icon">฿</span></div><div class="kpi-value">฿ 128,450</div><div class="kpi-foot"><span class="up">↗ 12.8%</span> &nbsp;vs. previous period</div></article>
+ <article class="card kpi"><div class="kpi-top">Total Orders <span class="kpi-icon">▤</span></div><div class="kpi-value">1,284</div><div class="kpi-foot"><span class="up">↗ 8.2%</span> &nbsp;vs. previous period</div></article>
+ <article class="card kpi"><div class="kpi-top">Active Customers <span class="kpi-icon">♙</span></div><div class="kpi-value">846</div><div class="kpi-foot"><span class="up">↗ 5.6%</span> &nbsp;vs. previous period</div></article>
+ <article class="card kpi"><div class="kpi-top">Avg. Order Value <span class="kpi-icon">◈</span></div><div class="kpi-value">฿ 100.04</div><div class="kpi-foot"><span class="up">↗ 3.1%</span> &nbsp;vs. previous period</div></article>
+</div>
+<div class="grid">
+ <article class="card panel"><div class="panel-head"><h3>Revenue Overview</h3><span>Last 7 days&nbsp;⌄</span></div><div class="bars">
+  <div class="bar-group"><div class="bar" style="height:42%"></div><span class="bar-label">Mon</span></div><div class="bar-group"><div class="bar" style="height:65%"></div><span class="bar-label">Tue</span></div><div class="bar-group"><div class="bar" style="height:52%"></div><span class="bar-label">Wed</span></div><div class="bar-group"><div class="bar active" style="height:88%"></div><span class="bar-label">Thu</span></div><div class="bar-group"><div class="bar" style="height:70%"></div><span class="bar-label">Fri</span></div><div class="bar-group"><div class="bar" style="height:58%"></div><span class="bar-label">Sat</span></div><div class="bar-group"><div class="bar" style="height:77%"></div><span class="bar-label">Sun</span></div>
+ </div><div class="legend"><span><i></i>Revenue</span><span>Updated daily</span></div></article>
+ <article class="card panel"><div class="panel-head"><h3>Recent Activity</h3><span>View all →</span></div><div class="activity">
+  <div class="activity-row"><div class="activity-icon">✓</div><div><strong>New order received</strong><small>Order #CA-10284 · ฿245.00</small></div><time>2 min</time></div>
+  <div class="activity-row"><div class="activity-icon">♙</div><div><strong>New customer registered</strong><small>Customer joined via LINE</small></div><time>18 min</time></div>
+  <div class="activity-row"><div class="activity-icon">▧</div><div><strong>Stock updated</strong><small>Arabica Coffee Beans · +12 units</small></div><time>1 hr</time></div>
+  <div class="activity-row"><div class="activity-icon">✧</div><div><strong>Promotion published</strong><small>Afternoon Delight · Active</small></div><time>3 hr</time></div>
+ </div></article>
+</div>
+<div class="quick"><button data-page="Create Order"><span class="qicon">＋</span><span><b>Create new order</b><small>Start a customer order</small></span></button><button data-page="Add Product"><span class="qicon">▧</span><span><b>Add a product</b><small>Update your product catalogue</small></span></button><button data-page="View Reports"><span class="qicon">▨</span><span><b>View reports</b><small>Explore business performance</small></span></button></div>
+</section></main></div>
+<div class="toast" id="toast"></div>
+<script>
+const shell=document.getElementById('shell'),toast=document.getElementById('toast');
+function notify(msg){toast.textContent=msg;toast.classList.add('show');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>toast.classList.remove('show'),2100)}
+document.getElementById('menuBtn').addEventListener('click',()=>{if(innerWidth<=720)shell.classList.toggle('mobile-open');else shell.classList.toggle('collapsed')});
+document.getElementById('overlay').addEventListener('click',()=>shell.classList.remove('mobile-open'));
+document.getElementById('reportsToggle').addEventListener('click',e=>{e.currentTarget.classList.toggle('open');document.getElementById('reportsSub').classList.toggle('show')});
+function activate(name){document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.subnav button').forEach(x=>x.classList.remove('selected'));let btn=[...document.querySelectorAll('.nav-item')].find(x=>x.dataset.page===name);if(btn)btn.classList.add('active');let sub=[...document.querySelectorAll('.subnav button')].find(x=>x.dataset.page===name);if(sub){sub.classList.add('selected');document.getElementById('reportsToggle').classList.add('active','open');document.getElementById('reportsSub').classList.add('show')}document.getElementById('crumbPage').textContent=name;document.getElementById('pageTitle').textContent=name==='Overview'?'Good afternoon, Admin ✦':name;notify(name+' selected — prototype navigation');shell.classList.remove('mobile-open')}
+document.querySelectorAll('[data-page]').forEach(x=>x.addEventListener('click',()=>activate(x.dataset.page)));
+document.getElementById('storeSwitch').addEventListener('click',()=>notify('Workspace selector opened — demo'));
+document.getElementById('helpBtn').addEventListener('click',()=>notify('Help Centre — demo link'));
+document.getElementById('noticeBtn').addEventListener('click',()=>notify('You’re all caught up.'));
+document.getElementById('languageBtn').addEventListener('click',e=>{e.currentTarget.textContent=e.currentTarget.textContent==='EN'?'TH':'EN';notify('Language preview toggled')});
+document.getElementById('themeBtn').addEventListener('click',()=>{document.body.classList.toggle('night');notify('Appearance control — preview')});
+document.getElementById('searchInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.value.trim())notify('Search: '+e.target.value.trim())});
+</script>
+</body></html>
