@@ -119,3 +119,36 @@ h1,h2,h3,.top-title,.panel-title,.orders-title,.stat-value,.clock-time{font-fami
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;transition:none!important}
 }
+
+/* Additional CMS-aligned presets and dark-map readability */
+
+:root[data-ca-theme="ocean"]{
+  --ca-primary:#1F4E79;--ca-primary-strong:#173A5A;--ca-accent:#2E7BBF;
+  --ca-bg:#F0F3F7;--ca-surface:#FFFFFF;--ca-ink:#202B38;--ca-muted:#6F7E8D;
+  --ca-line:#DDE5EE;--ca-soft:#E8F0F8;
+}
+:root[data-ca-theme="charcoal"]{
+  --ca-primary:#2B3035;--ca-primary-strong:#1D2226;--ca-accent:#5C6670;
+  --ca-bg:#F2F3F4;--ca-surface:#FFFFFF;--ca-ink:#252A2E;--ca-muted:#727A80;
+  --ca-line:#E0E3E5;--ca-soft:#ECEFF1;
+}
+:root[data-ca-theme="terracotta"]{
+  --ca-primary:#9C3D23;--ca-primary-strong:#722C1A;--ca-accent:#C8693F;
+  --ca-bg:#F6F1EE;--ca-surface:#FFFEFC;--ca-ink:#352720;--ca-muted:#81736B;
+  --ca-line:#E9DDD6;--ca-soft:#F4E9E3;
+}
+:root[data-ca-theme="dark"] .featured-order.not-new,
+:root[data-ca-theme="dark"] .featured-body,
+:root[data-ca-theme="dark"] .featured-actions,
+:root[data-ca-theme="dark"] .order-row.selected{background:var(--ca-surface);color:var(--ca-ink)}
+:root[data-ca-theme="dark"] .featured-total{border-color:var(--ca-line)}
+:root[data-ca-theme="dark"] .featured-total strong{color:#F08A78}
+:root[data-ca-theme="dark"] .featured-order.not-new .featured-head{background:linear-gradient(95deg,#183D2B,#24563A)}
+:root[data-ca-theme="dark"] .map-status-count,
+:root[data-ca-theme="dark"] .gps-status-list,
+:root[data-ca-theme="dark"] .map-footnote{color:var(--ca-ink)}
+:root[data-ca-theme="dark"] .map-status{background:rgba(32,45,36,.96)}
+:root[data-ca-theme="dark"] .legend{background:rgba(32,45,36,.96)}
+:root[data-ca-theme="dark"] .queue-search input{background:#26352B;color:var(--ca-ink);border-color:var(--ca-line)}
+:root[data-ca-theme="dark"] .sound-btn.off{background:#344239;color:var(--ca-ink);border-color:var(--ca-line)}
+:root[data-ca-theme="dark"] .row-action{color:#9BC9A8}
