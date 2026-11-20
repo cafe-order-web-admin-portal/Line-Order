@@ -1,0 +1,83 @@
+/* Café Amazon International Sidebar Theme
+   Visual layer only. Keeps existing routes, Supabase, auth, RLS, order actions and GPS logic unchanged. */
+:root{
+  --green:#07583f;--green2:#063f30;--mint:#e2f2e9;--ink:#17211e;--muted:#718079;
+  --line:#e7eee9;--bg:#f3f7f4;--white:#fff;--shadow:0 12px 30px rgba(16,61,45,.09);
+  --ca-coral:#ff806e;--ca-surface:rgba(255,255,255,.92);
+}
+html,body{background:var(--bg);color:var(--ink)}
+body{background-image:radial-gradient(ellipse at 95% 0%,rgba(255,128,110,.13),transparent 28%),radial-gradient(ellipse at 0% 100%,rgba(36,153,105,.09),transparent 32%);background-attachment:fixed}
+button,input,select,textarea{font-family:"IBM Plex Sans Thai",sans-serif}
+h1,h2,h3,.top-title,.kpi .value,.stat-value,.clock-time{font-family:"Prompt","IBM Plex Sans Thai",sans-serif}
+.app-shell{grid-template-columns:244px minmax(0,1fr);background:transparent}
+.sidebar{height:100vh;position:sticky;top:0;z-index:20;background:linear-gradient(180deg,#064b37,#073d30);color:#fff;border:0;padding:24px 15px;gap:14px;box-shadow:5px 0 24px rgba(6,63,48,.08)}
+.sidebar .brand{align-items:center;gap:11px;padding:0 8px 22px;margin:0;border-bottom:1px solid #ffffff24}
+.sidebar .brand-mark{width:46px;height:46px;border-radius:15px;background:linear-gradient(145deg,#08734f,#06412f);font-size:0;position:relative;box-shadow:0 8px 20px rgba(0,0,0,.12)}
+.sidebar .brand-mark:after{content:"☕";font-size:23px;line-height:1}
+.sidebar .brand h1{color:#fff;font-size:16px;margin:0}
+.sidebar .brand p{font-size:9px;color:#b9d8c9;letter-spacing:1.1px;margin:2px 0 0}
+.sidebar .nav{display:grid;gap:4px}
+.sidebar .nav:before{content:"WORKSPACE";font-size:10px;color:#9bc3b0;letter-spacing:1.5px;font-weight:800;padding:12px 12px 4px}
+.sidebar .nav button,.sidebar .nav a.nav-link-live{border:0;text-align:left;padding:12px 13px;border-radius:12px;color:#d7e8df;background:transparent;font-size:13px;font-weight:700;min-height:43px}
+.sidebar .nav button:hover,.sidebar .nav button.active{background:#ffffff20;color:#fff}
+.sidebar .nav button.active{box-shadow:inset 3px 0 var(--ca-coral)}
+.sidebar .nav .ico{width:25px;font-size:16px}
+.sidebar .nav a.nav-link-live{background:#ffffff18;border:1px solid #ffffff1f;box-shadow:none;margin:2px 0 4px}
+.sidebar .nav a.nav-link-live .nav-live-pill{background:var(--ca-coral);color:#fff}
+.sidebar .side-foot{margin-top:auto;border:1px solid #ffffff20;border-radius:14px;background:#ffffff15;padding:12px;color:#fff;font-size:11px;line-height:1.55}
+.sidebar .side-foot:before{content:"⌖  ";color:#b9d8c9}
+.main{min-width:0;background:transparent}
+.main>.topbar{background:rgba(255,255,255,.9);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);box-shadow:0 4px 18px rgba(16,61,45,.04)}
+.top-title{color:var(--green2)}
+.top-actions .btn{border-radius:12px}
+.top-actions .btn.primary{background:var(--green);border-color:var(--green)}
+.content{padding:24px 28px 40px}
+.page-head h2{font-size:25px;letter-spacing:-.4px;color:var(--ink)}
+.kpi,.panel{background:var(--ca-surface);border:1px solid rgba(255,255,255,.95);border-radius:20px;box-shadow:var(--shadow)}
+.kpi{padding:19px;position:relative;overflow:hidden}
+.kpi:after{content:"";position:absolute;width:120px;height:70px;right:-32px;bottom:-40px;border-radius:50%;background:rgba(255,128,110,.12)}
+.kpi .value{font-size:27px;letter-spacing:-.7px}
+.panel{padding:20px}
+.panel-title h3{color:var(--green2)}
+.btn{border-radius:12px;transition:transform .16s ease,box-shadow .16s ease,filter .16s ease}
+.btn.primary{background:var(--green);border-color:var(--green)}
+.btn.primary:hover{background:var(--green2);filter:brightness(1.03)}
+.field input,.field select,.field textarea,.search,.select-small{border-radius:11px;border-color:#dce7e0}
+.pill{background:#e2f2e9;color:var(--green)}
+table{border-radius:12px}
+th{background:#f3f8f4;color:#64756b}
+tbody tr:hover{background:#f8fbf8}
+.login-wrap{background:linear-gradient(145deg,#e9f4ed,#f7faf8 60%,#fceeea)}
+.login-card{border-radius:24px;box-shadow:var(--shadow)}
+#toast{border-radius:14px;background:#173d30}
+.mobile-bottom-nav{background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border:1px solid #e6eee8;border-radius:18px 18px 0 0;box-shadow:0 -10px 28px rgba(14,55,37,.10)}
+.mobile-bottom-nav a[aria-current="page"],.mobile-bottom-nav button.active{color:#07583f;background:#e8f4ec}
+.mobile-more-menu{border-radius:17px;box-shadow:0 12px 34px rgba(12,51,27,.18)}
+/* LIVE ORDERS shares the same International palette while retaining its own workflow. */
+.topbar{background:linear-gradient(105deg,#064b37,#07583f);box-shadow:0 3px 14px rgba(5,53,31,.18)}
+.topbar .brand,.topbar .clock-time{color:#fff}
+.topbar .brand-sub,.topbar .clock-date,.topbar .branch-live{color:#d8eee4}
+.header-btn{border-radius:12px}
+.live-badge{background:#168b55}
+.stat,.panel{border-radius:18px}
+.stat{box-shadow:var(--shadow);border-color:rgba(255,255,255,.95)}
+.stat-icon{border-radius:13px}
+.panel{box-shadow:var(--shadow)}
+.orders-head{background:linear-gradient(100deg,#fff,#f5faf6)}
+.orders-title{color:#07583f}
+.queue-tabs .tab.active,.stage-btn{background:#07583f}
+.queue-tabs .tab.active{color:#fff}
+.primary{background:#07583f}
+.login-card{border-radius:22px}
+@media(max-width:950px){
+  .app-shell{display:block!important;padding-bottom:calc(var(--mobile-nav-height,62px) + 10px + env(safe-area-inset-bottom,0px))}
+  .sidebar{display:none!important}
+  .main>.topbar{background:rgba(255,255,255,.94)}
+  .content{padding:17px 15px calc(24px + env(safe-area-inset-bottom,0px))!important}
+}
+@media(max-width:600px){
+  .content{padding:14px 12px calc(20px + env(safe-area-inset-bottom,0px))!important}
+  .kpi{border-radius:17px;padding:14px}
+  .panel{border-radius:17px;padding:15px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
