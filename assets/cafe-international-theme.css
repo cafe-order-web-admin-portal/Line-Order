@@ -81,3 +81,6 @@ tbody tr:hover{background:#f8fbf8}
   .panel{border-radius:17px;padding:15px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+
+.sidebar .side-label{font-size:10px;color:#9bc3b0;letter-spacing:1.5px;font-weight:800;padding:14px 12px 5px}
+.sidebar .side-foot-meta{display:block;color:#b9d8c9;font-size:10px;margin-top:4px}
