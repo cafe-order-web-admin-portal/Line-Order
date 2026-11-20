@@ -34,7 +34,7 @@
   }
   function init(){
     var link=document.createElement('link');
-    link.rel='stylesheet';link.href='./assets/unified-theme.css?v=1.0.0';
+    link.rel='stylesheet';link.href='./assets/unified-theme.css?v=1.0.1';
     document.head.appendChild(link);
     apply(read(),false);
     addPicker();
