@@ -3,7 +3,7 @@
 (function(){
   'use strict';
   var KEY='ca.unified.theme.v1';
-  var THEMES=['international','forest','espresso','ocean','charcoal','terracotta','dark'];
+  var THEMES=['international','classic','forest','espresso','ocean','charcoal','terracotta','dark'];
   function valid(v){return THEMES.indexOf(v)>=0?v:'forest';}
   function read(){
     try{
@@ -27,7 +27,7 @@
     if(!host||host.querySelector('.ca-theme-picker'))return;
     var select=document.createElement('select');
     select.className='ca-theme-picker';select.setAttribute('aria-label','เลือกธีม');
-    select.innerHTML='<option value="international">International</option><option value="forest">Forest</option><option value="espresso">Espresso</option><option value="ocean">Ocean</option><option value="charcoal">Charcoal</option><option value="terracotta">Terracotta</option><option value="dark">Dark</option>';
+    select.innerHTML='<option value="international">International</option><option value="classic">Classic</option><option value="forest">Forest</option><option value="espresso">Espresso</option><option value="ocean">Ocean</option><option value="charcoal">Charcoal</option><option value="terracotta">Terracotta</option><option value="dark">Dark</option>';
     select.value=window.CafeAmazonTheme.get();
     select.addEventListener('change',function(){apply(select.value,true);});
     host.insertBefore(select,host.firstChild);
