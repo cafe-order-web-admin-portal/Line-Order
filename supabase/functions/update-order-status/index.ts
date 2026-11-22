@@ -7,13 +7,13 @@ const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
 const TRACKING_URL = "https://cafe-order-web-admin-portal.github.io/Line-Order/track-order.html";
 function statusFlex(status: string, orderNumber: string, amount?: string) {
   const views: Record<string, { title: string; detail: string; icon: string; color: string; bg: string; step: number }> = {
-    pending: { title: "ได้รับคำสั่งซื้อแล้ว", detail: "ร้านกำลังตรวจสอบรายการของคุณ โปรดรอการยืนยันจากพนักงาน", icon: "🕒", color: "#B86A12", bg: "#FFF3DF", step: 0 },
-    confirmed: { title: "ร้านยืนยันออเดอร์แล้ว", detail: "ขอบคุณครับ ร้านรับออเดอร์เรียบร้อยแล้ว บาริสต้าจะเริ่มเตรียมเครื่องดื่มให้คุณ", icon: "✅", color: "#167347", bg: "#E8F6ED", step: 1 },
-    preparing: { title: "กำลังปรุงเครื่องดื่ม", detail: "บาริสต้ากำลังตั้งใจเตรียมเครื่องดื่มแก้วโปรดของคุณ อีกไม่นานพร้อมเสิร์ฟครับ", icon: "☕", color: "#7650A8", bg: "#F2ECFA", step: 2 },
-    ready: { title: "เครื่องดื่มพร้อมแล้ว!", detail: "ออเดอร์ของคุณพร้อมรับที่ร้านแล้ว กรุณาติดต่อพนักงานและแจ้งเลข Order นี้ครับ", icon: "🎉", color: "#087A49", bg: "#E5F7EC", step: 3 },
-    on_the_way: { title: "กำลังจัดส่งถึงคุณ", detail: "ออเดอร์ออกเดินทางแล้ว โปรดเตรียมรับเครื่องดื่มจากพนักงานจัดส่งครับ", icon: "🛵", color: "#087C83", bg: "#E5F7F7", step: 3 },
-    arrived: { title: "ไรเดอร์ถึงจุดหมายแล้ว", detail: "พนักงานจัดส่งถึงจุดหมายแล้ว กรุณาตรวจรับเครื่องดื่มของคุณครับ", icon: "📍", color: "#087C83", bg: "#E5F7F7", step: 3 },
-    completed: { title: "ส่งมอบออเดอร์เรียบร้อย", detail: "ขอบคุณที่แวะมาเติมความสดชื่นกับ Café Amazon หวังว่าจะได้ดูแลคุณอีกครั้งครับ 💚", icon: "💚", color: "#167347", bg: "#E8F6ED", step: 4 },
+    pending: { title: "ได้รับคำสั่งซื้อแล้ว", detail: "ร้านได้รับคำสั่งซื้อแล้ว กำลังตรวจสอบรายการและเตรียมยืนยันให้คุณ กรุณารอสักครู่", icon: "🕒", color: "#B86A12", bg: "#FFF3DF", step: 0 },
+    confirmed: { title: "ร้านยืนยันออเดอร์แล้ว", detail: "ร้านยืนยันคำสั่งซื้อแล้ว บาริสต้ากำลังเตรียมเครื่องดื่มให้คุณ", icon: "✅", color: "#167347", bg: "#E8F6ED", step: 1 },
+    preparing: { title: "กำลังปรุงเครื่องดื่ม", detail: "บาริสต้ากำลังเตรียมเครื่องดื่มแก้วโปรดของคุณ เมื่อพร้อมรับแล้วเราจะแจ้งให้ทราบทันที", icon: "☕", color: "#7650A8", bg: "#F2ECFA", step: 2 },
+    ready: { title: "เครื่องดื่มพร้อมแล้ว!", detail: "เครื่องดื่มพร้อมรับแล้ว กรุณาแจ้งหมายเลขคำสั่งซื้อกับพนักงานหน้าร้าน", icon: "🎉", color: "#087A49", bg: "#E5F7EC", step: 3 },
+    on_the_way: { title: "กำลังจัดส่งถึงคุณ", detail: "คำสั่งซื้อออกจากร้านแล้ว โปรดเตรียมรับเครื่องดื่มจากพนักงานจัดส่ง", icon: "🛵", color: "#087C83", bg: "#E5F7F7", step: 3 },
+    arrived: { title: "ไรเดอร์ถึงจุดหมายแล้ว", detail: "พนักงานจัดส่งถึงจุดหมายแล้ว กรุณาตรวจรับคำสั่งซื้อของคุณ", icon: "📍", color: "#087C83", bg: "#E5F7F7", step: 3 },
+    completed: { title: "ส่งมอบออเดอร์เรียบร้อย", detail: "ขอบคุณที่ใช้บริการ Café Amazon หวังว่าจะได้ดูแลคุณอีกครั้งครับ 💚", icon: "💚", color: "#167347", bg: "#E8F6ED", step: 4 },
     cancelled: { title: "คำสั่งซื้อถูกยกเลิก", detail: "ออเดอร์นี้ถูกยกเลิกแล้ว หากต้องการสอบถามรายละเอียดเพิ่มเติม กรุณาติดต่อพนักงานหน้าร้าน", icon: "✖", color: "#B33B32", bg: "#FCEDEC", step: -1 },
   };
   const v = views[status] ?? { title: "สถานะออเดอร์อัปเดตแล้ว", detail: "ตรวจสอบรายละเอียดคำสั่งซื้อได้จากปุ่มด้านล่าง", icon: "ℹ️", color: "#167347", bg: "#E8F6ED", step: 0 };

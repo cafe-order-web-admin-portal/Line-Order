@@ -1151,6 +1151,7 @@ async function loadMenu(){
   allProducts=(productRes.data||[]).map(p=>{const bp=priceMap.get(String(p.id))||{};const price=Number(bp.price??0);return {...p,price,is_available:bp.is_available===true,can_order:p.is_active===true&&bp.is_available===true&&price>0};});
   await loadOptions(ids);
   renderProducts();
+  await applyReorderDraft();
   const orderable=allProducts.filter(p=>p.can_order).length;
   setStatus('สาขา '+branch.branch_name+' · พบสินค้า '+allProducts.length+' รายการ · พร้อมสั่ง '+orderable+' รายการ');
 }
@@ -1164,6 +1165,27 @@ async function loadOptions(productIds){
   const failed=[gr,pg,op,po].find(r=>r.error);
   if(failed){console.error('Option data load failed:',failed.error);optionGroups=[];productGroupLinks=[];optionChoices=[];productOptionLinks=[];setStatus($('status').textContent+' · ยังอ่านตัวเลือกสินค้าไม่ได้');return;}
   optionGroups=gr.data||[];productGroupLinks=pg.data||[];optionChoices=op.data||[];productOptionLinks=po.data||[];
+}
+
+async function applyReorderDraft(){
+ const params=new URLSearchParams(location.search);if(params.get('reorder')!=='1')return;
+ let draft=null;try{draft=JSON.parse(sessionStorage.getItem('ca_line_order_reorder_v1')||'null');}catch(_){}
+ sessionStorage.removeItem('ca_line_order_reorder_v1');
+ const lines=Array.isArray(draft?.items)?draft.items:[];let added=0,skipped=0;
+ for(const line of lines){
+  const product=allProducts.find(p=>String(p.id)===String(line.product_id)&&p.can_order);if(!product){skipped++;continue;}
+  const selected=[];
+  for(const old of (Array.isArray(line.selected_options)?line.selected_options:[])){
+   const choice=optionChoices.find(o=>String(o.option_code||'')===String(old.option_code||'')&&String(optionGroups.find(g=>String(g.id)===String(o.group_id))?.group_code||'')===String(old.group_code||''));
+   if(choice)selected.push(String(choice.id));
+  }
+  const groups=getProductGroups(product.id);let valid=true;for(const group of groups){const count=selected.filter(id=>group.choices.some(o=>String(o.id)===id)).length;if(count<Number(group.min_select||0))valid=false;}
+  if(!valid){skipped++;continue;}
+  const key=String(product.id)+'|'+[...selected].sort().join(',');const prev=cart.get(key);cart.set(key,{key,product,qty:(prev?.qty||0)+Math.max(1,Number(line.quantity)||1),optionIds:selected});added++;
+ }
+ updateCart();
+ if(added){setStatus('เพิ่มเมนูเดิมลงตะกร้าแล้ว '+added+' รายการ'+(skipped?' · '+skipped+' รายการต้องเลือกใหม่':''));renderCart();showModal('cart-modal');}
+ else if(skipped){setStatus('บางเมนูเดิมไม่มีขายหรือเปลี่ยนตัวเลือกแล้ว กรุณาเลือกเมนูใหม่');}
 }
 function renderCategories(cats){$('categories').innerHTML='<button class="chip active" data-cat="all">ทั้งหมด</button>'+cats.map(c=>'<button class="chip" data-cat="'+esc(c.id)+'">'+esc(c.category_name)+'</button>').join('');}
 function renderProducts(){

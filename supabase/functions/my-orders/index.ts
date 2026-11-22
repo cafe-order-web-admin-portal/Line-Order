@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
     if (channelError || !channel) return reply(origin, 403, { error: "ไม่พบ LINE Channel ที่ใช้งานได้" });
 
     const { data: branch, error: branchError } = await admin
-      .from("branches").select("id,branch_code,branch_name")
+      .from("branches").select("id,branch_code,branch_name,phone")
       .eq("id", channel.branch_id).eq("is_active", true).maybeSingle();
     if (branchError || !branch) return reply(origin, 403, { error: "สาขาที่ผูกกับ LINE นี้ปิดให้บริการ" });
 
@@ -95,7 +95,7 @@ Deno.serve(async (req: Request) => {
       console.error("get_liff_orders failed:", error.code, error.message);
       return reply(origin, 502, { error: "ไม่สามารถโหลดประวัติคำสั่งซื้อได้ในขณะนี้" });
     }
-    return reply(origin, 200, { success: true, branch: { id: branch.id, branch_code: branch.branch_code, branch_name: branch.branch_name }, orders: Array.isArray(data) ? data : [] });
+    return reply(origin, 200, { success: true, branch: { id: branch.id, branch_code: branch.branch_code, branch_name: branch.branch_name, phone: branch.phone }, orders: Array.isArray(data) ? data : [] });
   } catch (error) {
     console.error("my-orders failed:", error instanceof Error ? error.message : error);
     if (error instanceof Error && error.message.includes("LINE_ID_TOKEN")) return reply(origin, 401, { error: "LINE login หมดอายุ กรุณาเปิดหน้าเว็บสั่งซื้อใหม่" });
