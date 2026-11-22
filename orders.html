@@ -352,6 +352,40 @@ html.cms-owner-embedded .live-order-card .order-product-options{
   word-break:normal!important;
 }
 
+
+/* iPad/tablet: order queue must use the full panel width, not two narrow columns */
+.orders-panel{container-type:inline-size;container-name:ordersqueue}
+@container ordersqueue (max-width:650px){
+  .queue-list{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:8px!important;
+  }
+  .queue-list>.live-order-card{
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+  }
+  .live-order-card .order-product-row{
+    grid-template-columns:38px minmax(0,1fr) auto auto!important;
+    gap:7px!important;
+  }
+  .live-order-card .order-product-copy,
+  .live-order-card .order-product-options{
+    min-width:0!important;
+    max-width:100%!important;
+    writing-mode:horizontal-tb!important;
+    word-break:normal!important;
+    overflow-wrap:anywhere!important;
+  }
+  .live-order-card .order-product-options{
+    display:flex!important;
+    flex-direction:row!important;
+    flex-wrap:wrap!important;
+    align-items:center!important;
+  }
+}
+
 </style>
 <link rel="stylesheet" href="./assets/cafe-international-theme.css?v=20261120.2">
 
