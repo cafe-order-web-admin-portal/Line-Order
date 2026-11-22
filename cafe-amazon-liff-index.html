@@ -925,7 +925,7 @@ main{
   .card > .photo{height:clamp(128px,40vw,150px)!important;min-height:128px!important}
 }
 
-/* Category navigation: visual-only icon tiles; category IDs and filtering remain unchanged. */
+/* Category navigation: compact, color-coded SVG icons; visual-only. */
 .chips{
   display:flex!important;align-items:stretch!important;gap:10px!important;
   overflow-x:auto!important;overflow-y:hidden!important;
@@ -939,24 +939,22 @@ main{
   justify-content:center!important;gap:7px!important;
   white-space:normal!important;text-align:center!important;
   border:1px solid #e7e9e3!important;border-radius:22px!important;
-  background:#fff!important;color:#28251f!important;
-  padding:10px 7px!important;
+  background:#fff!important;color:#28251f!important;padding:10px 7px!important;
   box-shadow:0 4px 12px rgba(37,55,38,.075)!important;
   scroll-snap-align:start!important;transition:background .18s,border-color .18s,transform .18s!important;
 }
-.chip-icon{width:36px;height:36px;display:grid;place-items:center;color:#5b4934;flex:0 0 auto}
-.chip-icon svg{width:34px;height:34px;display:block;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.chip-icon{width:25px;height:25px;display:grid;place-items:center;flex:0 0 auto}
+.chip-icon svg{width:24px;height:24px;display:block;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 .chip-label{display:block;font:600 12px/1.25 'IBM Plex Sans Thai',sans-serif;overflow-wrap:anywhere}
 .chip.active{
   background:#145b3a!important;color:#fff!important;border-color:#145b3a!important;
   box-shadow:0 6px 15px rgba(20,91,58,.2)!important;transform:translateY(-1px)
 }
-.chip.active .chip-icon{color:#fff}
 @media(min-width:600px){
   .chips{gap:12px!important}
   .chip{flex-basis:100px!important;width:100px!important;min-height:102px!important}
-  .chip-icon{width:40px;height:40px}
-  .chip-icon svg{width:38px;height:38px}
+  .chip-icon{width:27px;height:27px}
+  .chip-icon svg{width:26px;height:26px}
   .chip-label{font-size:13px}
 }
 /* End category navigation */
@@ -1232,9 +1230,19 @@ function categoryIcon(name){
   if(/เบเกอ|ขนม|bakery|snack|อาหาร/.test(n))return '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M5 30c0-12 8-21 19-21s19 9 19 21v7H5v-7Zm8-2 4 4m5-13v9m9-9-2 9m-13 9v-4m17 4v-4"/></svg>';
   return '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="3"/><rect x="27" y="8" width="13" height="13" rx="3"/><rect x="8" y="27" width="13" height="13" rx="3"/><rect x="27" y="27" width="13" height="13" rx="3"/></svg>';
 }
+function categoryIconColor(name){
+  const n=String(name||'').toLocaleLowerCase('th');
+  if(/ทั้งหมด|แนะนำ|popular|recommend/.test(n))return '#f2c94c';
+  if(/กาแฟ|coffee|espresso/.test(n))return '#8b5e3c';
+  if(/ชา|tea|มัทฉะ|matcha/.test(n))return '#4f9b58';
+  if(/นม|ช็อกโกแลต|milk|chocolate/.test(n))return '#a87955';
+  if(/ผลไม้|fruit|juice/.test(n))return '#d95b55';
+  if(/เบเกอ|ขนม|bakery|snack|อาหาร/.test(n))return '#c77a3b';
+  return '#64816d';
+}
 function renderCategories(cats){
-  const all='<button class="chip active" data-cat="all"><span class="chip-icon">'+categoryIcon('ทั้งหมด')+'</span><span class="chip-label">ทั้งหมด</span></button>';
-  $('categories').innerHTML=all+(cats||[]).map(c=>'<button class="chip" data-cat="'+esc(c.id)+'"><span class="chip-icon">'+categoryIcon(c.category_name)+'</span><span class="chip-label">'+esc(c.category_name)+'</span></button>').join('');
+  const all='<button class="chip active" data-cat="all"><span class="chip-icon" style="color:'+categoryIconColor('ทั้งหมด')+'">'+categoryIcon('ทั้งหมด')+'</span><span class="chip-label">ทั้งหมด</span></button>';
+  $('categories').innerHTML=all+(cats||[]).map(c=>'<button class="chip" data-cat="'+esc(c.id)+'"><span class="chip-icon" style="color:'+categoryIconColor(c.category_name)+'">'+categoryIcon(c.category_name)+'</span><span class="chip-label">'+esc(c.category_name)+'</span></button>').join('');
 }
 function renderProducts(){
   const base=activeCategory==='all'?allProducts:allProducts.filter(p=>String(p.category_id)===String(activeCategory));
