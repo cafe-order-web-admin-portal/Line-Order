@@ -925,6 +925,41 @@ main{
   .card > .photo{height:clamp(128px,40vw,150px)!important;min-height:128px!important}
 }
 
+/* Category navigation: visual-only icon tiles; category IDs and filtering remain unchanged. */
+.chips{
+  display:flex!important;align-items:stretch!important;gap:10px!important;
+  overflow-x:auto!important;overflow-y:hidden!important;
+  padding:5px 2px 13px!important;scrollbar-width:none!important;
+  scroll-snap-type:x proximity!important;-webkit-overflow-scrolling:touch;
+}
+.chips::-webkit-scrollbar{display:none!important}
+.chip{
+  flex:0 0 88px!important;width:88px!important;min-height:94px!important;
+  display:flex!important;flex-direction:column!important;align-items:center!important;
+  justify-content:center!important;gap:7px!important;
+  white-space:normal!important;text-align:center!important;
+  border:1px solid #e7e9e3!important;border-radius:22px!important;
+  background:#fff!important;color:#28251f!important;
+  padding:10px 7px!important;
+  box-shadow:0 4px 12px rgba(37,55,38,.075)!important;
+  scroll-snap-align:start!important;transition:background .18s,border-color .18s,transform .18s!important;
+}
+.chip-icon{width:36px;height:36px;display:grid;place-items:center;color:#5b4934;flex:0 0 auto}
+.chip-icon svg{width:34px;height:34px;display:block;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.chip-label{display:block;font:600 12px/1.25 'IBM Plex Sans Thai',sans-serif;overflow-wrap:anywhere}
+.chip.active{
+  background:#145b3a!important;color:#fff!important;border-color:#145b3a!important;
+  box-shadow:0 6px 15px rgba(20,91,58,.2)!important;transform:translateY(-1px)
+}
+.chip.active .chip-icon{color:#fff}
+@media(min-width:600px){
+  .chips{gap:12px!important}
+  .chip{flex-basis:100px!important;width:100px!important;min-height:102px!important}
+  .chip-icon{width:40px;height:40px}
+  .chip-icon svg{width:38px;height:38px}
+  .chip-label{font-size:13px}
+}
+/* End category navigation */
 </style>
 </head>
 <body>
@@ -1187,7 +1222,20 @@ async function applyReorderDraft(){
  if(added){setStatus('เพิ่มเมนูเดิมลงตะกร้าแล้ว '+added+' รายการ'+(skipped?' · '+skipped+' รายการต้องเลือกใหม่':''));renderCart();showModal('cart-modal');}
  else if(skipped){setStatus('บางเมนูเดิมไม่มีขายหรือเปลี่ยนตัวเลือกแล้ว กรุณาเลือกเมนูใหม่');}
 }
-function renderCategories(cats){$('categories').innerHTML='<button class="chip active" data-cat="all">ทั้งหมด</button>'+cats.map(c=>'<button class="chip" data-cat="'+esc(c.id)+'">'+esc(c.category_name)+'</button>').join('');}
+function categoryIcon(name){
+  const n=String(name||'').toLocaleLowerCase('th');
+  if(/ทั้งหมด|แนะนำ|popular|recommend/.test(n))return '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="m24 5 5.8 11.8 13 1.9-9.4 9.2 2.2 13L24 34.8 12.4 41l2.2-13-9.4-9.2 13-1.9L24 5Z"/></svg>';
+  if(/กาแฟ|coffee|espresso/.test(n))return '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 18h27v13a10 10 0 0 1-10 10h-7A10 10 0 0 1 8 31V18Zm27 4h4a5 5 0 0 1 0 10h-5M15 12c-3-3 3-4 0-8m10 8c-3-3 3-4 0-8"/></svg>';
+  if(/ชา|tea|มัทฉะ|matcha/.test(n))return '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 42V21m0 8C9 29 7 18 8 9c11 0 17 5 16 16m0 0c1-12 9-17 18-16 0 11-5 19-18 19M14 42h20"/></svg>';
+  if(/นม|ช็อกโกแลต|milk|chocolate/.test(n))return '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M18 5h12v6l4 5v25H14V16l4-5V5Zm0 6h12M14 20h20M20 5v6"/></svg>';
+  if(/ผลไม้|fruit|juice/.test(n))return '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 14c-11-8-20 1-17 13 2 9 8 15 17 13 9 2 15-4 17-13 3-12-6-21-17-13Zm0 0c-1-7 4-11 11-10-1 6-5 10-11 10Z"/></svg>';
+  if(/เบเกอ|ขนม|bakery|snack|อาหาร/.test(n))return '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M5 30c0-12 8-21 19-21s19 9 19 21v7H5v-7Zm8-2 4 4m5-13v9m9-9-2 9m-13 9v-4m17 4v-4"/></svg>';
+  return '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="3"/><rect x="27" y="8" width="13" height="13" rx="3"/><rect x="8" y="27" width="13" height="13" rx="3"/><rect x="27" y="27" width="13" height="13" rx="3"/></svg>';
+}
+function renderCategories(cats){
+  const all='<button class="chip active" data-cat="all"><span class="chip-icon">'+categoryIcon('ทั้งหมด')+'</span><span class="chip-label">ทั้งหมด</span></button>';
+  $('categories').innerHTML=all+(cats||[]).map(c=>'<button class="chip" data-cat="'+esc(c.id)+'"><span class="chip-icon">'+categoryIcon(c.category_name)+'</span><span class="chip-label">'+esc(c.category_name)+'</span></button>').join('');
+}
 function renderProducts(){
   const base=activeCategory==='all'?allProducts:allProducts.filter(p=>String(p.category_id)===String(activeCategory));
   const query=($('menu-search')?.value||'').trim().toLocaleLowerCase('th');
