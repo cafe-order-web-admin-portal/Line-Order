@@ -386,6 +386,31 @@ html.cms-owner-embedded .live-order-card .order-product-options{
   }
 }
 
+
+/* Compact cross-device order cancellation confirmation */
+.cancel-confirm-overlay{
+ position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;
+ padding:20px;background:rgba(20,30,24,.42);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+}
+.cancel-confirm-overlay[hidden]{display:none!important}
+.cancel-confirm-dialog{
+ width:min(100%,380px);margin:0;background:#fff;border:1px solid #e4ebe5;border-radius:18px;
+ box-shadow:0 18px 55px rgba(0,0,0,.2);padding:20px 20px 16px;
+ font-family:Prompt,"IBM Plex Sans Thai",sans-serif;animation:cancelDialogIn .16s ease-out;
+}
+.cancel-confirm-title{margin:0;color:#20382b;font-size:17px;line-height:1.45;font-weight:700}
+.cancel-confirm-message{margin:8px 0 18px;color:#6e7b72;font-size:13px;line-height:1.55}
+.cancel-confirm-actions{display:flex;justify-content:flex-end;gap:9px}
+.cancel-confirm-actions button{
+ min-height:40px;padding:8px 16px;border-radius:10px;font:600 13px Prompt,"IBM Plex Sans Thai",sans-serif;
+ cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;
+}
+.cancel-confirm-back{border:1px solid #dce6df;background:#f6f8f6;color:#526258}
+.cancel-confirm-yes{border:1px solid #c95b50;background:#c9473b;color:#fff}
+.cancel-confirm-actions button:active{transform:scale(.98)}
+@keyframes cancelDialogIn{from{opacity:0;transform:translateY(6px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(prefers-reduced-motion:reduce){.cancel-confirm-dialog{animation:none}}
+
 </style>
 <link rel="stylesheet" href="./assets/cafe-international-theme.css?v=20261120.2">
 
@@ -431,8 +456,46 @@ html.cms-owner-embedded .live-order-card .order-product-options{
  </button>
 </nav>
 <script src="./assets/mobile-nav.js?v=1.0.0"></script>
+
+<div id="cancel-confirm-overlay" class="cancel-confirm-overlay" hidden aria-hidden="true">
+ <section class="cancel-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="cancel-confirm-title" aria-describedby="cancel-confirm-message">
+  <h2 id="cancel-confirm-title" class="cancel-confirm-title">ยืนยันยกเลิกคำสั่งซื้อนี้หรือไม่?</h2>
+  <p id="cancel-confirm-message" class="cancel-confirm-message">เมื่อตกลง คำสั่งซื้อนี้จะถูกเปลี่ยนสถานะเป็นยกเลิก</p>
+  <div class="cancel-confirm-actions">
+   <button type="button" class="cancel-confirm-back" id="cancel-confirm-back">กลับไปตรวจสอบ</button>
+   <button type="button" class="cancel-confirm-yes" id="cancel-confirm-yes">ยืนยันยกเลิก</button>
+  </div>
+ </section>
+</div>
+
 <script>
 'use strict';
+
+let cancelConfirmBusy=false;
+function showCancelConfirm(){
+ return new Promise(resolve=>{
+  const overlay=document.getElementById('cancel-confirm-overlay');
+  const back=document.getElementById('cancel-confirm-back');
+  const yes=document.getElementById('cancel-confirm-yes');
+  if(!overlay||cancelConfirmBusy){resolve(false);return;}
+  cancelConfirmBusy=true;
+  const finish=value=>{
+   overlay.hidden=true;overlay.setAttribute('aria-hidden','true');
+   back.removeEventListener('click',onBack);yes.removeEventListener('click',onYes);
+   overlay.removeEventListener('click',onBackdrop);
+   document.removeEventListener('keydown',onKey);
+   cancelConfirmBusy=false;resolve(value);
+  };
+  const onBack=()=>finish(false),onYes=()=>finish(true);
+  const onBackdrop=e=>{if(e.target===overlay)finish(false);};
+  const onKey=e=>{if(e.key==='Escape')finish(false);};
+  back.addEventListener('click',onBack);yes.addEventListener('click',onYes);
+  overlay.addEventListener('click',onBackdrop);document.addEventListener('keydown',onKey);
+  overlay.hidden=false;overlay.setAttribute('aria-hidden','false');
+  requestAnimationFrame(()=>back.focus({preventScroll:true}));
+ });
+}
+
 const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{url:'https://ytxbnqosenolojiifeikf.supabase.co',publishableKey:'sb_publishable_etVnNCvAjs9Q-F5k_E7UIw_NwULqK2x'};
 const db=window.supabase.createClient(cfg.url,cfg.publishableKey),$=id=>document.getElementById(id);
 const labels={pending:'รอร้านยืนยัน',confirmed:'ยืนยันแล้ว',preparing:'กำลังเตรียม',ready:'พร้อมรับสินค้า',on_the_way:'กำลังจัดส่ง',arrived:'ถึงจุดหมายแล้ว',completed:'สำเร็จแล้ว',cancelled:'ยกเลิก'};
@@ -568,7 +631,7 @@ async function login(){
  }
 }
 $('login-btn').addEventListener('click',login);$('password').addEventListener('keydown',e=>{if(e.key==='Enter')login();});$('logout-btn').addEventListener('click',logout);$('refresh-btn').addEventListener('click',loadDashboard);$('search').addEventListener('input',renderOrders);document.querySelector('.queue-tabs').addEventListener('click',e=>{const btn=e.target.closest('[data-filter]');if(!btn)return;activeFilter=btn.dataset.filter;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===btn));renderOrders();});
-$('orders-list').addEventListener('click',e=>{const toggle=e.target.closest('[data-toggle-items]');if(toggle){const card=toggle.closest('.live-order-card');const open=card.classList.toggle('details-open');const count=ordersCache.find(o=>o.id===toggle.dataset.toggleItems)?.items?.length||0;toggle.textContent=open?'ซ่อนรายละเอียด ▴':'ดูรายการ '+count+' เมนู ▾';return;}const advance=e.target.closest('[data-advance]');if(advance){if(advance.dataset.next==='completed'){const order=ordersCache.find(o=>o.id===advance.dataset.advance);const pickup=order?.order_status==='ready';const promptText=pickup?'ยืนยันว่าลูกค้ามารับสินค้าและได้รับสินค้าเรียบร้อยแล้วใช่หรือไม่?':'ยืนยันว่าคำสั่งซื้อถูกส่งมอบให้ลูกค้าเรียบร้อยแล้วใช่หรือไม่?';if(!confirm(promptText))return;}changeStatus(advance.dataset.advance,advance.dataset.next,advance);return;}const cancel=e.target.closest('[data-cancel]');if(cancel&&confirm('ยืนยันยกเลิกคำสั่งซื้อนี้หรือไม่?')){changeStatus(cancel.dataset.cancel,'cancelled',cancel);return;}const row=e.target.closest('[data-select]');if(row)selectOrder(row.dataset.select);});
+$('orders-list').addEventListener('click',e=>{const toggle=e.target.closest('[data-toggle-items]');if(toggle){const card=toggle.closest('.live-order-card');const open=card.classList.toggle('details-open');const count=ordersCache.find(o=>o.id===toggle.dataset.toggleItems)?.items?.length||0;toggle.textContent=open?'ซ่อนรายละเอียด ▴':'ดูรายการ '+count+' เมนู ▾';return;}const advance=e.target.closest('[data-advance]');if(advance){if(advance.dataset.next==='completed'){const order=ordersCache.find(o=>o.id===advance.dataset.advance);const pickup=order?.order_status==='ready';const promptText=pickup?'ยืนยันว่าลูกค้ามารับสินค้าและได้รับสินค้าเรียบร้อยแล้วใช่หรือไม่?':'ยืนยันว่าคำสั่งซื้อถูกส่งมอบให้ลูกค้าเรียบร้อยแล้วใช่หรือไม่?';if(!confirm(promptText))return;}changeStatus(advance.dataset.advance,advance.dataset.next,advance);return;}const cancel=e.target.closest('[data-cancel]');if(cancel){const orderId=cancel.dataset.cancel;showCancelConfirm().then(confirmed=>{if(confirmed)changeStatus(orderId,'cancelled',cancel);});return;}const row=e.target.closest('[data-select]');if(row)selectOrder(row.dataset.select);});
 db.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>handleSession(session),0);});db.auth.getSession().then(({data})=>handleSession(data.session));updateClock();setInterval(updateClock,1000);setInterval(()=>{if(currentStaff&&!document.hidden)loadDashboard();},8000);setInterval(()=>{if(currentStaff&&!document.hidden)refreshLiveLocations();},2500);setInterval(()=>{if(currentStaff&&!document.hidden)renderMap();},5000);window.addEventListener('online',()=>{if(currentStaff){subscribeRealtime();queueRefresh();}});document.addEventListener('visibilitychange',()=>{if(currentStaff&&!document.hidden){subscribeRealtime();queueRefresh();}});window.addEventListener('pageshow',()=>{if(currentStaff){subscribeRealtime();queueRefresh();}});window.addEventListener('focus',()=>{if(currentStaff)queueRefresh();});
 </script>
 </body></html>
