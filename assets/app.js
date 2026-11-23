@@ -22,7 +22,7 @@
   };
   const state = {
     db:null, session:null, user:null, staff:null, branches:[], categories:[],
-    products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:(['dashboard','products','categories','options','import','history','customers','payment-overview','payment-transactions','payment-settings'].includes(location.hash.slice(1))?location.hash.slice(1):'dashboard'), selectedOptionProduct:'', customerSearch:'',
+    products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:(['dashboard','products','categories','options','import','history','customers','payment-overview','payment-transactions','payment-settings','payment-recovery'].includes(location.hash.slice(1))?location.hash.slice(1):'dashboard'), selectedOptionProduct:'', customerSearch:'',
     search:'', categoryFilter:'', importRows:[], importFileName:'', importErrors:[],
     busy:false, paymentRows:[], paymentSettings:null, paymentLoadedBranch:'', paymentSettingsBranch:'', paymentLoadError:'', paymentStatusFilter:'all', paymentSearch:'', paymentLoading:false, paymentExpandedRows:new Set(), paymentRealtimeChannel:null, paymentRefreshTimer:null, paymentNavExpanded:false
   };
@@ -142,7 +142,7 @@
     const morePages = [];
     if(isSuper()) morePages.push(['categories','หมวดหมู่','categories'],['options','ตัวเลือกสินค้า','options']);
     if(state.staff?.role !== 'staff') morePages.push(['history','ประวัติ Import','history'],['customers','ข้อมูลลูกค้า','customers'],['payment-overview','QR Payment Overview','history'],['payment-transactions','Payment Transactions','history'],['payment-settings','Payment Settings','options']);
-    const moreActive = ['categories','options','history','customers','payment-overview','payment-transactions','payment-settings'].includes(state.page);
+    const moreActive = ['categories','options','history','customers','payment-overview','payment-transactions','payment-settings','payment-recovery'].includes(state.page);
     const mobileMore = morePages.length
       ? morePages.map(([key,label,ico])=>`<button type="button" data-page="${key}">${mobileIcon(ico)}<span>${label}</span></button>`).join('')
       : '<div class="mobile-more-empty">ไม่มีเมนูเพิ่มเติมสำหรับบัญชีนี้</div>';
@@ -160,7 +160,7 @@
             ${state.staff?.role !== 'staff' ? navButton('import','Import ข้อมูล','⇧') : ''}
             ${state.staff?.role !== 'staff' ? navButton('history','ประวัติ Import','◷') : ''}
             ${state.staff?.role !== 'staff' ? navButton('customers','ข้อมูลลูกค้า','♙') : ''}
-            ${state.staff?.role !== 'staff' ? '<div class="side-label">PAYMENT OPERATIONS</div><div class="payment-nav-tree"><button type="button" class="payment-nav-toggle" id="payment-nav-toggle" aria-expanded="'+state.paymentNavExpanded+'"><span class="ico">▣</span><span>QR Payment Transactions</span><span class="payment-nav-caret">'+(state.paymentNavExpanded?'⌃':'⌄')+'</span></button><div class="payment-nav-sub" id="payment-nav-sub" '+(state.paymentNavExpanded?'':'hidden')+'><button data-page="payment-overview">Dashboard Overview</button><button data-page="payment-transactions">Transactions</button><button data-page="payment-settings">Payment Settings</button></div></div>' : ''}
+            ${state.staff?.role !== 'staff' ? '<div class="side-label">PAYMENT OPERATIONS</div><div class="payment-nav-tree"><button type="button" class="payment-nav-toggle" id="payment-nav-toggle" aria-expanded="'+state.paymentNavExpanded+'"><span class="ico">▣</span><span>QR Payment Transactions</span><span class="payment-nav-caret">'+(state.paymentNavExpanded?'⌃':'⌄')+'</span></button><div class="payment-nav-sub" id="payment-nav-sub" '+(state.paymentNavExpanded?'':'hidden')+'><button data-page="payment-overview">Dashboard Overview</button><button data-page="payment-transactions">Transactions</button><button data-page="payment-settings">Payment Settings</button><button data-page="payment-recovery">Payment Recovery</button></div></div>' : ''}
           </nav>
           <div class="side-foot">☕ &nbsp; ${esc(activeBranch()?.branch_name||'Café Amazon')}<br><span class="side-foot-meta">Store Management · Supabase</span></div>
         </aside>
@@ -208,7 +208,7 @@
     $('#refresh-btn').onclick=async()=>{try{await reloadData();renderApp();toast('โหลดข้อมูลล่าสุดแล้ว')}catch(e){toast(e.message)}};
     bindPageEvents();
   }
-  function pageTitle(){return ({dashboard:'ภาพรวม',products:'จัดการสินค้า',categories:'จัดการหมวดหมู่',options:'ตัวเลือกสินค้า',import:'นำเข้าข้อมูล',history:'ประวัติการนำเข้า',customers:'ข้อมูลลูกค้า LINE','payment-overview':'QR Payment Overview','payment-transactions':'QR Payment Transactions','payment-settings':'QR Payment Settings'})[state.page]||'Web Admin Portal';}
+  function pageTitle(){return ({dashboard:'ภาพรวม',products:'จัดการสินค้า',categories:'จัดการหมวดหมู่',options:'ตัวเลือกสินค้า',import:'นำเข้าข้อมูล',history:'ประวัติการนำเข้า',customers:'ข้อมูลลูกค้า LINE','payment-overview':'QR Payment Overview','payment-transactions':'QR Payment Transactions','payment-settings':'QR Payment Settings','payment-recovery':'Payment Recovery & Verification'})[state.page]||'Web Admin Portal';}
   function renderPage(){
     if(state.page==='dashboard') return viewDashboard();
     if(state.page==='products') return viewProducts();
@@ -220,6 +220,7 @@
     if(state.page==='payment-overview') return (state.staff?.role!=='staff')?viewPaymentOverview():'<div class="alert">ไม่มีสิทธิ์เข้าถึงข้อมูลการชำระเงิน</div>';
     if(state.page==='payment-transactions') return (state.staff?.role!=='staff')?viewPaymentTransactions():'<div class="alert">ไม่มีสิทธิ์เข้าถึงข้อมูลการชำระเงิน</div>';
     if(state.page==='payment-settings') return (state.staff?.role!=='staff')?viewPaymentSettings():'<div class="alert">ไม่มีสิทธิ์เข้าถึงข้อมูลการชำระเงิน</div>';
+    if(state.page==='payment-recovery') return (state.staff?.role!=='staff')?viewPaymentRecovery():'<div class="alert">ไม่มีสิทธิ์เข้าถึงข้อมูลการชำระเงิน</div>';
     return '';
   }
 
@@ -467,7 +468,7 @@
 
   const PAYMENT_API_URL = 'https://ytxbnqosenolojifeikf.supabase.co/functions/v1/payment-portal';
   const PAYMENT_QR_URL = 'https://cafe-order-web-admin-portal.github.io/Line-Order/assets/promptpay-qr.png';
-  const paymentPageKeys = ['payment-overview','payment-transactions','payment-settings'];
+  const paymentPageKeys = ['payment-overview','payment-transactions','payment-settings','payment-recovery'];
   const paymentStatusLabel = {awaiting_payment:'รอชำระเงิน',submitted:'รอตรวจสอบ',matched:'ยืนยันรับเงินแล้ว',rejected:'ไม่ผ่านการตรวจสอบ',needs_review:'ต้องตรวจสอบเพิ่มเติม',expired:'หมดเวลาชำระ'};
   const paymentStatusBadge = status => '<span class="badge '+(status==='matched'?'ok':(['submitted','needs_review','awaiting_payment'].includes(status)?'warn':'bad'))+'">'+esc(paymentStatusLabel[status]||status||'-')+'</span>';
   const paymentSourceLabel = source => source==='line_oa'?'LINE OA':source==='web_upload'?'เว็บไซต์':'ยังไม่ส่งสลิป';
@@ -568,6 +569,14 @@
       [['all','ทุกสถานะ'],['awaiting_payment','รอชำระเงิน'],['submitted','รอตรวจสอบ'],['matched','ยืนยันรับเงินแล้ว'],['needs_review','ต้องตรวจสอบเพิ่ม'],['rejected','ไม่ผ่านการตรวจสอบ'],['expired','หมดเวลาชำระ']].map(([v,l])=>'<option value="'+v+'" '+(state.paymentStatusFilter===v?'selected':'')+'>'+l+'</option>').join('')+
       '</select><span class="pill">'+filtered.length+' รายการ</span></div>'+paymentRowsTable(filtered)+'</div>';
   }
+  function viewPaymentRecovery() {
+    const rows=(state.paymentRows||[]).filter(x=>["submitted","needs_review","rejected"].includes(x.status));
+    return paymentPageHead("Payment Recovery & Verification","ศูนย์กู้คืนรายการชำระเงินเมื่อระบบอัตโนมัติขัดข้อง")+
+      '<div class="alert info"><b>ข้อกำหนดก่อนยืนยัน Paid:</b> ต้องตรวจสอบยอดเงินเข้าบัญชีจริงจาก Mobile Banking หรือ Statement พร้อมตรวจยอดและเลขอ้างอิงธุรกรรม ระบบจะบันทึกผู้อนุมัติและประวัติทุกครั้ง</div>'+
+      '<div class="kpis payment-kpis"><div class="kpi"><div class="label">รายการที่ต้องกู้คืน</div><div class="value">'+rows.length+'</div><div class="hint">เฉพาะรายการที่ยังไม่ Paid</div></div><div class="kpi"><div class="label">รอตรวจสอบ</div><div class="value">'+rows.filter(x=>x.status==="submitted").length+'</div></div><div class="kpi"><div class="label">ระบบขัดข้อง / ตรวจเพิ่ม</div><div class="value">'+rows.filter(x=>x.status==="needs_review").length+'</div></div><div class="kpi"><div class="label">ถูกปฏิเสธ</div><div class="value">'+rows.filter(x=>x.status==="rejected").length+'</div></div></div>'+
+      '<div class="panel payment-panel"><div class="panel-title"><h3>รายการที่สามารถตรวจสอบกู้คืนได้</h3><span class="pill">'+rows.length+' รายการ</span></div>'+paymentRowsTable(rows)+'</div>';
+  }
+
   function viewPaymentSettings() {
     const p=state.paymentSettings||{}, enabled=p.qr_payment_enabled===true;
     const autoEnabled=p.slip_auto_verify_enabled===true, providerReady=p.slip_verifier_configured===true;
@@ -598,6 +607,17 @@
         '<div class="field"><label>ผลการตรวจสอบจากระบบ</label><textarea readonly>'+esc(tx.verification_note||'ยังไม่มีผลการตรวจสอบ')+'</textarea></div>'+proof+
         '<div class="payment-audit"><b>ประวัติรายการ</b>'+(audit.length?audit.map(a=>'<div><b>'+esc(paymentAuditLabel(a.action_key))+'</b><small class="payment-audit-meta">'+esc(new Date(a.created_at).toLocaleString('th-TH'))+' · '+esc(a.actor_ref||'-')+'</small></div>').join(''):'<div class="muted">ยังไม่มีประวัติ</div>')+'</div>'+
         '<div class="alert info">สถานะ Paid เปลี่ยนโดยระบบอัตโนมัติเท่านั้น เมื่อผู้ให้บริการตรวจสอบธุรกรรม ยอดเงิน บัญชีผู้รับ และรายการซ้ำผ่านครบเงื่อนไข</div>');
+      if(["submitted","needs_review","rejected"].includes(tx.status)) {
+        sh.insertAdjacentHTML("beforeend", '<hr><div class="panel-title"><h3>Manual Recovery · ยืนยันการชำระเงินกรณีพิเศษ</h3></div><div class="alert info">ใช้เฉพาะเมื่อระบบอัตโนมัติผิดพลาด และตรวจสอบพบเงินเข้าบัญชีร้านจริงแล้วเท่านั้น</div><div class="field"><label>ยอดเงินที่ได้รับจริง (บาท)</label><input id="recovery-paid-amount" type="number" min="0.01" step="0.01" value="'+Number(tx.expected_amount||0).toFixed(2)+'"></div><div class="field"><label>เลขอ้างอิงธุรกรรมจากสลิป / Statement *</label><input id="recovery-transfer-ref" maxlength="140" value="'+esc(tx.transfer_reference||'')+'"></div><div class="field"><label>เหตุผลและหลักฐานการตรวจสอบ *</label><textarea id="recovery-note" maxlength="1000" placeholder="เช่น ตรวจสอบยอดเงินเข้าบัญชีร้านจาก Mobile Banking เวลา..."></textarea></div><label class="checkline"><input id="recovery-bank-confirmed" type="checkbox"> ยืนยันว่าได้ตรวจสอบยอดเงินเข้าบัญชีร้านจริงแล้ว ไม่ได้อาศัยภาพสลิปเพียงอย่างเดียว</label><div class="actions"><button class="btn primary" id="recovery-confirm-paid">ยืนยันรับเงิน (Manual Recovery)</button></div>');
+        $('#recovery-confirm-paid',sh).onclick=async()=>{
+          const btn=$('#recovery-confirm-paid',sh), paid=Number($('#recovery-paid-amount',sh).value), ref=$('#recovery-transfer-ref',sh).value.trim(), note=$('#recovery-note',sh).value.trim(), bank=$('#recovery-bank-confirmed',sh).checked;
+          if(!bank||!ref||!note||!Number.isFinite(paid)||paid<=0)return toast('กรุณากรอกข้อมูลและยืนยันการตรวจสอบเงินเข้าบัญชีจริงให้ครบ');
+          if(!confirm('ยืนยัน Manual Recovery ให้ Order '+tx.order_number+' เป็น Paid? การดำเนินการนี้จะบันทึกผู้อนุมัติใน Audit Log'))return;
+          btn.disabled=true;btn.textContent='กำลังยืนยัน…';
+          try{await callPaymentApi('admin-recovery-confirm',{transaction_id:tx.id,paid_amount:paid,transfer_reference:ref,note,bank_confirmed:true});$('.modal-bg')?.remove();state.paymentLoadedBranch='';await ensurePaymentPageData(true);toast('ยืนยันรับชำระเงินและบันทึก Audit Log แล้ว');}
+          catch(e){btn.disabled=false;btn.textContent='ยืนยันรับเงิน (Manual Recovery)';toast(e.message||'ยืนยันไม่สำเร็จ');}
+        };
+      }
       sh.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('.modal-bg').remove());
     } catch(e) {toast(e.message||'เปิดรายละเอียด Transaction ไม่สำเร็จ');}
   }
