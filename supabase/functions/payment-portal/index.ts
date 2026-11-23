@@ -197,7 +197,8 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
       throw new Error(updateError?.message || "ไม่สามารถแก้ไขคำสั่งซื้อได้ กรุณาตรวจสอบสถานะการชำระเงิน");
     }
     const [{ data: tx, error: txError }, { data: settings, error: settingsError }] = await Promise.all([
-      admin.from("payment_transactions").select("*").eq("id", (await admin.from("payment_transactions").select("id").eq("order_id", order.id).eq("customer_line_user_id", claims.sub).maybeSingle()).data?.id || "").maybeSingle(),
+      admin.from("payment_transactions").select("*").eq("order_id", order.id)
+        .eq("customer_line_user_id", claims.sub).maybeSingle(),
       admin.from("payment_settings").select("*").eq("branch_id", order.branch_id).maybeSingle(),
     ]);
     if (txError || !tx || tx.status !== "awaiting_payment") throw new Error("สถานะการชำระเงินเปลี่ยนแปลงแล้ว กรุณารีเฟรชหน้า");
