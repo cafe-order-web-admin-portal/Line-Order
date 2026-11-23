@@ -173,6 +173,71 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+
+    if (event.type === "message" && event.message?.type === "image" && lineUserId && token) {
+      try {
+        const imageResponse = await fetch("https://api-data.line.me/v2/bot/message/" + encodeURIComponent(String(event.message.id ?? "")) + "/content", {
+          headers: { Authorization: "Bearer " + accessToken },
+        });
+        if (!imageResponse.ok) throw new Error("LINE image download failed");
+        const mime = (imageResponse.headers.get("content-type") ?? "").split(";")[0].toLowerCase();
+        if (!["image/jpeg", "image/png", "image/webp"].includes(mime)) throw new Error("unsupported_image_type");
+        const bytes = new Uint8Array(await imageResponse.arrayBuffer());
+        if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new Error("image_too_large");
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        const hash = Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, "0")).join("");
+        const { data: candidates, error: txError } = await admin.from("payment_transactions")
+          .select("id,order_id,order_number,status,slip_sha256")
+          .eq("branch_id", branchId).eq("customer_line_user_id", lineUserId)
+          .in("status", ["awaiting_payment", "rejected"]).order("created_at", { ascending: false }).limit(2);
+        if (txError) throw txError;
+        let message = "";
+        if (!candidates?.length) {
+          message = "ยังไม่พบคำสั่งซื้อที่รอชำระเงินใน LINE บัญชีนี้ครับ กรุณาเปิดคำสั่งซื้อและตรวจสอบสถานะอีกครั้ง";
+        } else if (candidates.length > 1) {
+          message = "พบคำสั่งซื้อที่รอชำระเงินมากกว่า 1 รายการครับ กรุณาส่งสลิปหลังชำระทีละคำสั่งซื้อ เพื่อป้องกันการจับคู่ผิดรายการ";
+        } else {
+          const tx = candidates[0];
+          if (tx.slip_sha256 === hash) {
+            message = "ได้รับสลิปนี้เรียบร้อยแล้วครับ ร้านกำลังตรวจสอบยอดเงินจริง";
+          } else {
+            const { data: duplicate, error: duplicateError } = await admin.from("payment_transactions")
+              .select("id,order_number").eq("slip_sha256", hash).maybeSingle();
+            if (duplicateError) throw duplicateError;
+            if (duplicate) {
+              message = "สลิปภาพนี้ถูกส่งใช้กับคำสั่งซื้อ " + duplicate.order_number + " แล้วครับ กรุณาตรวจสอบก่อนส่งอีกครั้ง";
+            } else {
+              const ext = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
+              const path = branchId + "/" + tx.order_id + "/" + crypto.randomUUID() + "." + ext;
+              const { error: uploadError } = await admin.storage.from("payment-proofs").upload(path, bytes, { contentType: mime, upsert: false, cacheControl: "3600" });
+              if (uploadError) throw uploadError;
+              const now = new Date().toISOString();
+              const { error: updateError } = await admin.from("payment_transactions").update({
+                status: "submitted", slip_path: path, slip_sha256: hash, submitted_at: now, updated_at: now,
+                verification_note: null, paid_amount: null, verified_by: null, verified_at: null,
+              }).eq("id", tx.id).in("status", ["awaiting_payment", "rejected"]);
+              if (updateError) throw updateError;
+              const { error: orderError } = await admin.from("orders").update({ payment_status: "pending_verification" }).eq("id", tx.order_id);
+              if (orderError) throw orderError;
+              const { error: auditError } = await admin.from("payment_audit_logs").insert({
+                transaction_id: tx.id, order_id: tx.order_id, branch_id: branchId,
+                actor_ref: "customer:" + lineUserId, action_key: "proof_submitted_via_line",
+                before_state: { status: tx.status },
+                after_state: { status: "submitted", slip_sha256: hash, line_message_id: String(event.message.id ?? "") },
+              });
+              if (auditError) throw auditError;
+              message = "รับสลิปสำหรับคำสั่งซื้อ " + tx.order_number + " เรียบร้อยแล้วครับ ร้านจะตรวจสอบยอดเงินจริงก่อนยืนยันการชำระเงิน";
+            }
+          }
+        }
+        await replyText(token, message, accessToken, admin, branchId, lineUserId, eventKey, event.timestamp);
+      } catch (error) {
+        console.error("LINE payment slip processing failed:", error instanceof Error ? error.message : "unknown");
+        await replyText(token, "รับรูปแล้ว แต่ระบบยังบันทึกสลิปไม่สำเร็จ กรุณาลองส่งอีกครั้งหรือติดต่อร้านครับ", accessToken, admin, branchId, lineUserId, eventKey, event.timestamp);
+      }
+      continue;
+    }
+
     if (!token) continue;
     if (event.type === "follow") {
       await replyText(
