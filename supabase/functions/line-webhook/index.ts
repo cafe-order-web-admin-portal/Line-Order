@@ -85,7 +85,7 @@ async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>
   const transferRef = String(rawSlip?.transRef ?? "").trim();
   const receiverMatch = data?.matchedAccount;
   const transferDate = rawSlip?.date ? new Date(rawSlip.date) : null;
-  const currency = String(rawSlip?.amount?.local?.currency ?? "THB").toUpperCase();
+  const currency = String(rawSlip?.amount?.local?.currency ?? "").toUpperCase();
   const countryCode = String(rawSlip?.countryCode ?? "").toUpperCase();
 
   let rejectionReason = "";
@@ -101,7 +101,7 @@ async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>
     rejectionReason = "ยอดเงินในสลิปไม่ตรงกับยอดคำสั่งซื้อ";
   } else if (data?.isAmountMatched === false) {
     rejectionReason = "ยอดเงินไม่ผ่านการจับคู่";
-  } else if (!receiverMatch || !String(receiverMatch?.bankNumber ?? "").trim()) {
+  } else if (!receiverMatch || !String(receiverMatch?.bankNumber ?? "").trim() || !rawSlip?.receiver?.bank?.id) {
     rejectionReason = "บัญชีผู้รับไม่ตรงกับบัญชีที่ลงทะเบียนไว้ใน EasySlip";
   } else if (!transferRef) {
     rejectionReason = "ไม่พบเลขอ้างอิงธุรกรรมจากสลิป";
@@ -109,6 +109,13 @@ async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>
     rejectionReason = "รองรับเฉพาะสลิปโอนเงินบาทภายในประเทศไทย";
   } else if (!transferDate || !Number.isFinite(transferDate.getTime())) {
     rejectionReason = "ไม่พบวันเวลาโอนที่ตรวจสอบได้";
+  } else if (currency !== "THB") {
+    rejectionReason = "สกุลเงินในสลิปไม่ใช่ THB";
+  } else if (Number.isFinite(Date.parse(String(tx.created_at ?? ""))) &&
+    transferDate.getTime() < Date.parse(String(tx.created_at)) - 5 * 60 * 1000) {
+    rejectionReason = "วันเวลาโอนเกิดก่อนสร้างคำสั่งซื้อ";
+  } else if (transferDate.getTime() > Date.now() + 5 * 60 * 1000) {
+    rejectionReason = "วันเวลาโอนอยู่ในอนาคต";
   }
 
   if (!rejectionReason && !transientReason) {
@@ -150,7 +157,7 @@ async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>
       status: nextStatus, provider: "easyslip", amount: passed ? verifiedAmount : null,
       transfer_reference: passed ? transferRef : null,
       receiver_bank: passed ? String(receiverMatch?.bank?.shortCode ?? receiverMatch?.bank?.code ?? "") : null,
-      receiver_account_masked: passed ? String(receiverMatch?.bankNumber ?? "") : null,
+      receiver_account_last4: passed ? String(receiverMatch?.bankNumber ?? "").replace(/\D/g, "").slice(-4) : null,
       note,
     },
   });
@@ -327,7 +334,7 @@ Deno.serve(async (req: Request) => {
         const digest = await crypto.subtle.digest("SHA-256", bytes);
         const hash = Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, "0")).join("");
         const { data: candidates, error: txError } = await admin.from("payment_transactions")
-          .select("id,order_id,branch_id,order_number,expected_amount,status,slip_sha256,updated_at,orders!inner(order_status,payment_status)")
+          .select("id,order_id,branch_id,order_number,expected_amount,status,slip_sha256,updated_at,created_at,orders!inner(order_status,payment_status)")
           .eq("branch_id", branchId).eq("customer_line_user_id", lineUserId)
           .in("status", ["awaiting_payment", "rejected", "needs_review"])
           .not("orders.order_status", "in", "(cancelled,completed)")
