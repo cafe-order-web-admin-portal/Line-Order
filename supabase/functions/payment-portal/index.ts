@@ -59,7 +59,7 @@ async function resolveLineOaUrl(branchId: string, liffId: string): Promise<strin
   if (!response.ok) return null;
   const info = await response.json();
   const basicId = String(info.basicId ?? "").trim();
-  return basicId ? "https://line.me/R/oaMessage/" + encodeURIComponent(basicId) + "/?" + encodeURIComponent("ส่งสลิปชำระเงิน") : null;
+  return basicId ? "https://line.me/R/ti/p/" + basicId : null;
 }
 
 async function customerContext(body: Obj) {
