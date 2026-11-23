@@ -108,9 +108,15 @@ async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>
   let transientReason = "";
   if (!response.ok || payload?.success !== true) {
     const code = String(payload?.error?.code ?? "");
+    const pendingCode = code === "SLIP_PENDING" || /slip is pending|pending.*few minutes/i.test(String(payload?.error?.message ?? ""));
     const terminalCodes = ["SLIP_NOT_FOUND", "DUPLICATE_SLIP", "AMOUNT_MISMATCH", "ACCOUNT_NOT_MATCHED", "INVALID_SLIP", "INVALID_QR"];
-    if (terminalCodes.includes(code) || [400, 404, 422].includes(response.status)) rejectionReason = String(payload?.error?.message ?? "สลิปไม่ถูกต้อง");
-    else transientReason = String(payload?.error?.message ?? ("EasySlip HTTP " + response.status));
+    if (pendingCode) {
+      transientReason = "SLIP_PENDING: " + String(payload?.error?.message ?? "ธนาคารยังไม่เผยแพร่ข้อมูลธุรกรรม กรุณารอแล้วลองตรวจสอบอีกครั้ง");
+    } else if (terminalCodes.includes(code) || [400, 422].includes(response.status)) {
+      rejectionReason = String(payload?.error?.message ?? "สลิปไม่ถูกต้อง");
+    } else {
+      transientReason = String(payload?.error?.message ?? ("EasySlip HTTP " + response.status));
+    }
   } else if (data?.isDuplicate === true) {
     rejectionReason = "สลิปนี้ถูกใช้ตรวจสอบแล้ว";
   } else if (!Number.isFinite(verifiedAmount) || Math.abs(verifiedAmount - expectedAmount) > 0.004) {
