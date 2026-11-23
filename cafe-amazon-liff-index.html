@@ -1327,6 +1327,7 @@ function customerPaymentPanel(payment){
     '<b style="display:block;font-size:16px;color:#075b39">ชำระเงินผ่าน PromptPay</b>'+
     '<p style="font-size:13px;margin:5px 0 10px">'+esc(payment.customer_message||'กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ')+'</p>'+
     '<img src="'+esc(url)+'" alt="PromptPay QR" style="display:block;width:min(260px,85%);aspect-ratio:1/1;object-fit:contain;margin:0 auto 10px;background:#fff;border:1px solid #e2e9e4;border-radius:12px">'+
+    (url?'<button type="button" onclick="saveQrImage(\''+esc(url)+'\')" style="margin:0 auto 10px;padding:9px 16px;border:1px solid #c9ddcf;border-radius:10px;background:#fff;color:#176b45;font-weight:700;font-size:13px">⬇ บันทึกรูป QR</button>':'')+
     '<div style="font-size:13px;color:#66766b">ยอดที่ต้องชำระ</div><strong style="display:block;font-size:26px;color:#087b48">฿'+money(payment.amount)+'</strong>'+
     '<p style="font-size:11px;color:#75847a;margin:3px 0 12px">ชำระเงินแล้ว ส่งรูปสลิปในแชท LINE OA ได้ทันที</p>'+
     (lineUrl?'<button type="button" onclick="openBranchLineOa(\''+esc(lineUrl)+'\')" style="display:block;width:100%;box-sizing:border-box;margin-top:12px;padding:16px 14px;background:linear-gradient(100deg,#06a65b,#087544);color:#fff;border:0;border-radius:13px;font-weight:700;font-size:15px;box-shadow:0 5px 14px #08754435">💬 เปิด LINE OA เพื่อส่งสลิป</button>':'<div style="padding:11px;background:#fff5e8;border-radius:9px;color:#805500;font-size:12px">ยังไม่พบลิงก์ LINE OA ของสาขา กรุณากลับไปที่แชท LINE OA แล้วส่งรูปสลิป</div>')+
@@ -1336,6 +1337,39 @@ function customerPaymentPanel(payment){
 }
 
 
+// บันทึกรูป QR ลงเครื่องลูกค้า
+// เบราว์เซอร์ใน LINE มักไม่รองรับ attribute download → ถ้าดาวน์โหลดตรงไม่ได้ ให้เปิดรูปเต็มจอ
+// แล้วลูกค้ากดค้างที่รูปเพื่อบันทึกเองได้ · ล้มเหลวอย่างไรก็ไม่กระทบการชำระเงิน
+async function saveQrImage(url){
+  let blobUrl='';
+  try{
+    const target=new URL(String(url||''));
+    if(target.protocol!=='https:')throw new Error('QR url is not https');
+    try{
+      const res=await fetch(target.href,{mode:'cors'});
+      if(!res.ok)throw new Error('http '+res.status);
+      const blob=await res.blob();
+      blobUrl=URL.createObjectURL(blob);
+      const link=document.createElement('a');
+      link.href=blobUrl;link.download='promptpay-qr.png';
+      document.body.appendChild(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(blobUrl),4000);
+      return;
+    }catch(downloadError){
+      console.warn('Direct QR download unavailable:',downloadError);
+      if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl='';}
+    }
+    if(window.liff&&typeof window.liff.openWindow==='function'&&window.liff.isInClient()){
+      window.liff.openWindow({url:target.href,external:true});
+      return;
+    }
+    window.open(target.href,'_blank','noopener');
+  }catch(error){
+    if(blobUrl)URL.revokeObjectURL(blobUrl);
+    console.error('Save QR failed:',error);
+    alert('บันทึกรูป QR อัตโนมัติไม่สำเร็จ กรุณากดค้างที่รูป QR แล้วเลือกบันทึกรูปภาพ');
+  }
+}
 async function openBranchLineOa(url){try{const target=new URL(String(url||''));if(target.hostname!=='line.me')throw new Error('LINE OA link is invalid');if(window.liff&&typeof window.liff.openWindow==='function'&&window.liff.isInClient()){window.liff.openWindow({url:target.href,external:true});return;}window.location.href=target.href;}catch(error){console.error('Open LINE OA failed:',error);alert('ไม่สามารถเปิด LINE OA ได้ กรุณาปิดหน้าสั่งซื้อแล้วกลับไปที่แชท LINE OA ของสาขา');}}
 function showOrderPaymentReceipt(order,payment){
   $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(order.order_number||'-')+'</b><br>ยอดรวม: '+money(order.total_amount)+'<br>สถานะ: '+esc(statusLabel[order.order_status]||order.order_status||'รอยืนยัน')+customerPaymentPanel(payment);
