@@ -486,7 +486,7 @@ function historyMetrics(){const completed=ordersCache.filter(o=>o.order_status==
 async function loadOrderPaymentProof(orderId){
  const box=$('history-payment-proof');box.innerHTML='<b>หลักฐานการชำระเงิน</b><div class="panel-sub">กำลังตรวจสอบรายการชำระเงิน…</div>';
  try{
-  const{data,error}=await db.functions.invoke('payment-portal',{body:{action:'admin-list',status:'all'}});if(error||!data?.success)throw new Error(data?.error||error?.message||'โหลดข้อมูลชำระเงินไม่สำเร็จ');const rows=data.transactions||[];
+  const{data,error}=await db.functions.invoke('payment-portal',{body:{action:'admin-list',status:'all',branch_id:currentStaff?.branch_id||''}});if(error||!data?.success)throw new Error(data?.error||error?.message||'โหลดข้อมูลชำระเงินไม่สำเร็จ');const rows=data.transactions||[];
   const tx=rows.find(x=>String(x.order_id)===String(orderId));
   if(!tx){box.innerHTML='<b>หลักฐานการชำระเงิน</b><div class="panel-sub">ไม่พบรายการ QR Payment สำหรับคำสั่งซื้อนี้</div>';return;}
   const statuses={awaiting_payment:'รอชำระเงิน',submitted:'รอตรวจสอบสลิป',needs_review:'รอตรวจสอบเพิ่มเติม',matched:'ยืนยันรับชำระแล้ว',rejected:'สลิปไม่ผ่านการตรวจสอบ'};
