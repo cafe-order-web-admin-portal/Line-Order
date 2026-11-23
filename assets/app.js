@@ -536,7 +536,7 @@
       '<label class="payment-switch-row"><span><b>เปิดรับชำระด้วย QR PromptPay</b><small>เมื่อปิด ลูกค้าจะเห็นข้อความให้ชำระเงินที่หน้าร้าน</small></span><input type="checkbox" id="payment-enabled" '+(enabled?'checked':'')+'></label>'+
       '<div class="field"><label>ข้อความแนะนำการชำระเงิน</label><textarea id="payment-customer-message">'+esc(p.customer_message||'กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ')+'</textarea></div>'+
       '<div class="field"><label>เวลารอชำระเงิน (นาที)</label><input id="payment-timeout" type="number" min="5" max="240" value="'+Number(p.payment_timeout_minutes||20)+'"></div>'+
-      '<label class="checkline"><input type="checkbox" id="payment-require-slip" '+(p.require_slip!==false?'checked':'')+'> ให้ลูกค้าแนบสลิปหลังชำระเงิน</label><div class="actions"><button class="btn primary" id="payment-save-settings">บันทึกการตั้งค่า</button></div></section>'+
+      '<div class="alert info">กำหนดให้ลูกค้าแนบสลิปทุกครั้ง เพื่อส่งให้ร้านตรวจสอบก่อนยืนยันการชำระเงิน</div><div class="actions"><button class="btn primary" id="payment-save-settings">บันทึกการตั้งค่า</button></div></section>'+
       '<section class="panel payment-panel payment-qr-preview"><div class="panel-title"><h3>QR PromptPay ของร้าน</h3></div><img src="'+esc(p.qr_image_url||PAYMENT_QR_URL)+'" alt="PromptPay QR"><div class="payment-qr-caption">ลูกค้าสแกน QR แล้วกรอกยอดเงินตาม Order</div><div class="alert info">การตรวจสอบเงินยังเป็น Manual Verification ไม่มีการอ่าน Krungsri Simple หรือ Bank API อัตโนมัติ</div></section></div>'+
       '<div class="alert info">เมื่อปิดระบบ ลูกค้าจะเห็นข้อความ: <b>ยืนยันคำสั่งซื้อ ชำระเงินที่หน้าร้าน</b></div>';
   }
@@ -595,7 +595,7 @@
     if($('#payment-save-settings')) $('#payment-save-settings').onclick=async()=>{
       const btn=$('#payment-save-settings');btn.disabled=true;btn.textContent='กำลังบันทึก…';
       try {
-        const result=await callPaymentApi('admin-save-settings',{qr_payment_enabled:$('#payment-enabled').checked,qr_image_url:PAYMENT_QR_URL,customer_message:$('#payment-customer-message').value.trim(),payment_timeout_minutes:Number($('#payment-timeout').value||20),require_slip:$('#payment-require-slip').checked});
+        const result=await callPaymentApi('admin-save-settings',{qr_payment_enabled:$('#payment-enabled').checked,qr_image_url:PAYMENT_QR_URL,customer_message:$('#payment-customer-message').value.trim(),payment_timeout_minutes:Number($('#payment-timeout').value||20),require_slip:true});
         state.paymentSettings=result.settings;state.paymentSettingsBranch=state.branchId;renderApp();toast('บันทึก QR Payment Settings แล้ว');
       } catch(e) {btn.disabled=false;btn.textContent='บันทึกการตั้งค่า';toast(e.message);}
     };
