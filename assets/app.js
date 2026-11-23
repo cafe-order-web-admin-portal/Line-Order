@@ -517,14 +517,18 @@
     const submitted=rows.filter(x=>x.status==='submitted');
     const awaiting=rows.filter(x=>x.status==='awaiting_payment');
     const review=rows.filter(x=>x.status==='needs_review');
+    const lineSlips=rows.filter(x=>x.submission_source==='line_oa');
+    const rejected=rows.filter(x=>x.status==='rejected');
     const collected=matched.reduce((sum,x)=>sum+Number(x.paid_amount||0),0);
-    const pendingAmount=submitted.concat(awaiting).reduce((sum,x)=>sum+Number(x.expected_amount||0),0);
+    const pendingAmount=submitted.concat(awaiting,review).reduce((sum,x)=>sum+Number(x.expected_amount||0),0);
     return paymentPageHead('QR Payment Overview','ภาพรวมการรับชำระเงินและรายการที่ต้องตรวจสอบ')+
       (state.paymentLoadError?'<div class="alert">'+esc(state.paymentLoadError)+'</div>':'')+
       '<div class="kpis payment-kpis"><div class="kpi"><div class="label">Transactions ทั้งหมด</div><div class="value">'+rows.length+'</div><div class="hint">รายการในสาขาที่เลือก</div></div>'+
       '<div class="kpi"><div class="label">ยอดรับเงินที่ยืนยันแล้ว</div><div class="value">฿'+money(collected)+'</div><div class="hint">'+matched.length+' รายการ</div></div>'+
       '<div class="kpi"><div class="label">รอตรวจสอบสลิป</div><div class="value">'+submitted.length+'</div><div class="hint">ต้องตรวจสอบกับยอดเงินจริง</div></div>'+
-      '<div class="kpi"><div class="label">รอชำระ / ตรวจสอบเพิ่ม</div><div class="value">'+(awaiting.length+review.length)+'</div><div class="hint">ยอดคงค้าง ฿'+money(pendingAmount)+'</div></div></div>'+
+      '<div class="kpi"><div class="label">รับสลิปผ่าน LINE OA</div><div class="value">'+lineSlips.length+'</div><div class="hint">รายการที่ส่งมาทาง LINE</div></div>'+
+      '<div class="kpi"><div class="label">รอชำระ / ตรวจสอบเพิ่ม</div><div class="value">'+(awaiting.length+review.length)+'</div><div class="hint">ยอดคงค้าง ฿'+money(pendingAmount)+'</div></div>'+
+      '<div class="kpi"><div class="label">ไม่ผ่านการตรวจสอบ</div><div class="value">'+rejected.length+'</div><div class="hint">รายการที่ถูกปฏิเสธ</div></div></div>'+
       '<div class="panel payment-panel"><div class="panel-title"><h3>รายการล่าสุดที่ต้องดำเนินการ</h3><button class="btn" data-goto="payment-transactions">ดูรายการทั้งหมด →</button></div>'+
       paymentRowsTable(rows.filter(x=>['submitted','needs_review','awaiting_payment'].includes(x.status)).slice(0,10))+'</div>'+
       '<div class="alert info">ต้องตรวจสอบยอดเงินจริงจากแอปธนาคารหรือ Statement ก่อนยืนยัน Paid ระบบไม่ยืนยันจากภาพสลิปหรือยอดเงินที่ตรงกันเพียงอย่างเดียว</div>';
