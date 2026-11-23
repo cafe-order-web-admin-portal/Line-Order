@@ -482,6 +482,7 @@
     payment_auto_verified:'ระบบตรวจสอบสลิปผ่านและยืนยัน Paid',
     payment_auto_rejected:'ระบบปฏิเสธสลิปอัตโนมัติ',
     payment_auto_verification_error:'ระบบตรวจสอบสลิปขัดข้อง',
+    payment_manual_recovery_confirmed:'ยืนยันรับเงินผ่าน Payment Recovery',
     payment_auto_verification_settings_updated:'เปลี่ยนการตั้งค่าตรวจสอบสลิปอัตโนมัติ',
     payment_settings_updated:'เปลี่ยนการตั้งค่า QR Payment'
   }[key]||key||'-');
