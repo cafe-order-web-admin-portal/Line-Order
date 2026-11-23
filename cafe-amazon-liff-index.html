@@ -1324,11 +1324,12 @@ function customerPaymentPanel(payment){
     '<img src="'+esc(url)+'" alt="PromptPay QR" style="display:block;width:min(260px,85%);aspect-ratio:1/1;object-fit:contain;margin:0 auto 10px;background:#fff;border:1px solid #e2e9e4;border-radius:12px">'+
     '<div style="font-size:13px;color:#66766b">ยอดที่ต้องชำระ</div><strong style="display:block;font-size:26px;color:#087b48">฿'+money(payment.amount)+'</strong>'+
     '<p style="font-size:11px;color:#75847a;margin:3px 0 12px">ชำระเงินแล้ว ส่งรูปสลิปในแชท LINE OA ได้ทันที</p>'+
-    (lineUrl?'<a href="'+esc(lineUrl)+'" target="_blank" rel="noopener" style="display:block;box-sizing:border-box;margin-top:12px;padding:14px;background:#087544;color:#fff;border-radius:10px;font-weight:700;text-decoration:none">ส่งสลิปผ่าน LINE</a>':'<div style="padding:11px;background:#fff5e8;border-radius:9px;color:#805500;font-size:12px">กรุณากลับไปที่แชท LINE OA ของสาขา แล้วส่งรูปสลิป</div>')+
+    (lineUrl?'<button type="button" onclick="openBranchLineOa(\''+esc(lineUrl)+'\')" style="display:block;width:100%;box-sizing:border-box;margin-top:12px;padding:16px 14px;background:linear-gradient(100deg,#06a65b,#087544);color:#fff;border:0;border-radius:13px;font-weight:700;font-size:15px;box-shadow:0 5px 14px #08754435">💬 เปิด LINE OA เพื่อส่งสลิป</button><a href="'+esc(lineUrl)+'" target="_blank" rel="noopener" style="display:block;margin-top:9px;padding:10px;border:1px solid #087544;border-radius:10px;color:#087544;font-weight:700;text-decoration:none">↗ เปิดแชท LINE OA อีกครั้ง</a>':'<div style="padding:11px;background:#fff5e8;border-radius:9px;color:#805500;font-size:12px">ยังไม่พบลิงก์ LINE OA ของสาขา กรุณากลับไปที่แชท LINE OA แล้วส่งรูปสลิป</div>')+
     '<p style="font-size:10px;color:#79867d;margin:10px 0 0">ร้านจะยืนยันการชำระเงินหลังตรวจสอบยอดเงินจริงเท่านั้น</p></section>';
 }
 
 
+async function openBranchLineOa(url){try{const target=new URL(String(url||''));if(target.hostname!=='line.me')throw new Error('LINE OA link is invalid');if(window.liff&&typeof window.liff.openWindow==='function'&&window.liff.isInClient()){window.liff.openWindow({url:target.href,external:true});return;}window.location.href=target.href;}catch(error){console.error('Open LINE OA failed:',error);alert('ไม่สามารถเปิด LINE OA ได้ กรุณาปิดหน้าสั่งซื้อแล้วกลับไปที่แชท LINE OA ของสาขา');}}
 async function submitOrder(){
   $('order-error').textContent='';
   const idToken=getLineIdToken();
