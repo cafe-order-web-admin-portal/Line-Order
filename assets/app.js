@@ -456,6 +456,149 @@
     }
   }
 
+
+  const PAYMENT_API_URL = 'https://ytxbnqosenolojifeikf.supabase.co/functions/v1/payment-portal';
+  const PAYMENT_QR_URL = 'https://cafe-order-web-admin-portal.github.io/Line-Order/assets/promptpay-qr.png';
+  const paymentPageKeys = ['payment-overview','payment-transactions','payment-settings'];
+  const paymentStatusLabel = {awaiting_payment:'รอชำระเงิน',submitted:'รอตรวจสอบ',matched:'ยืนยันรับเงินแล้ว',rejected:'ไม่ผ่านการตรวจสอบ',needs_review:'ต้องตรวจสอบเพิ่มเติม',expired:'หมดเวลาชำระ'};
+  const paymentStatusBadge = status => '<span class="badge '+(status==='matched'?'ok':(['submitted','needs_review','awaiting_payment'].includes(status)?'warn':'bad'))+'">'+esc(paymentStatusLabel[status]||status||'-')+'</span>';
+
+  async function callPaymentApi(action, extra={}) {
+    const {data,error}=await state.db.auth.getSession();
+    if(error||!data.session?.access_token) throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
+    const response=await fetch(PAYMENT_API_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg().publishableKey,'Authorization':'Bearer '+data.session.access_token},body:JSON.stringify({action,branch_id:state.branchId,...extra})});
+    const result=await response.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
+    if(!response.ok||result.success!==true) throw new Error(result.error||'เรียกใช้ระบบ QR Payment ไม่สำเร็จ');
+    return result;
+  }
+  async function loadPaymentRows(status='all') {
+    const result=await callPaymentApi('admin-list',{status});
+    state.paymentRows=result.transactions||[];
+    state.paymentLoadedBranch=state.branchId;
+  }
+  async function loadPaymentSettings() {
+    const result=await callPaymentApi('admin-get-settings');
+    state.paymentSettings=result.settings||null;
+    state.paymentSettingsBranch=state.branchId;
+  }
+  async function ensurePaymentPageData(force=false) {
+    if(!paymentPageKeys.includes(state.page)||state.staff?.role==='staff'||!state.db) return;
+    if(!force&&state.paymentLoadedBranch===state.branchId&&state.paymentSettingsBranch===state.branchId) return;
+    state.paymentLoadError='';
+    try {
+      const jobs=[loadPaymentSettings()];
+      if(state.page!=='payment-settings') jobs.push(loadPaymentRows('all'));
+      await Promise.all(jobs);
+    } catch(e) { state.paymentLoadError=e.message||'โหลดข้อมูลการชำระเงินไม่สำเร็จ'; }
+    if(paymentPageKeys.includes(state.page)) renderApp();
+  }
+  function paymentPageHead(title,desc) {
+    return '<div class="page-head"><div><h2>'+title+'</h2><p>'+desc+'</p></div><div class="actions"><button class="btn" id="payment-refresh">↻ รีเฟรชข้อมูล</button></div></div>';
+  }
+  function paymentRowsTable(rows) {
+    if(!rows.length) return '<div class="empty-state">ยังไม่มีรายการชำระเงิน</div>';
+    return '<div class="table-wrap"><table class="payment-table"><thead><tr><th>วันที่ / เวลา</th><th>Order</th><th>ยอดที่ต้องจ่าย</th><th>ยอดที่แจ้ง</th><th>สถานะ</th><th>หลักฐาน</th><th></th></tr></thead><tbody>'+
+      rows.map(row=>'<tr><td>'+esc(row.created_at?new Date(row.created_at).toLocaleString('th-TH'):'-')+'</td><td><b>'+esc(row.order_number)+'</b><small class="payment-cell-sub">'+esc(row.customer_name||'')+'</small></td><td class="money">฿'+money(row.expected_amount)+'</td><td class="money">'+(row.paid_amount==null?'-':'฿'+money(row.paid_amount))+'</td><td>'+paymentStatusBadge(row.status)+'</td><td>'+(row.slip_url?'<a href="'+esc(row.slip_url)+'" target="_blank" rel="noopener">ดูสลิป</a>':'-')+'</td><td><button class="btn" data-payment-detail="'+esc(row.id)+'">ตรวจสอบ</button></td></tr>').join('')+
+      '</tbody></table></div>';
+  }
+  function viewPaymentOverview() {
+    const rows=state.paymentRows||[];
+    const matched=rows.filter(x=>x.status==='matched');
+    const submitted=rows.filter(x=>x.status==='submitted');
+    const awaiting=rows.filter(x=>x.status==='awaiting_payment');
+    const review=rows.filter(x=>x.status==='needs_review');
+    const collected=matched.reduce((sum,x)=>sum+Number(x.paid_amount||0),0);
+    const pendingAmount=submitted.concat(awaiting).reduce((sum,x)=>sum+Number(x.expected_amount||0),0);
+    return paymentPageHead('QR Payment Overview','ภาพรวมการรับชำระเงินและรายการที่ต้องตรวจสอบ')+
+      (state.paymentLoadError?'<div class="alert">'+esc(state.paymentLoadError)+'</div>':'')+
+      '<div class="kpis payment-kpis"><div class="kpi"><div class="label">Transactions ทั้งหมด</div><div class="value">'+rows.length+'</div><div class="hint">รายการในสาขาที่เลือก</div></div>'+
+      '<div class="kpi"><div class="label">ยอดรับเงินที่ยืนยันแล้ว</div><div class="value">฿'+money(collected)+'</div><div class="hint">'+matched.length+' รายการ</div></div>'+
+      '<div class="kpi"><div class="label">รอตรวจสอบสลิป</div><div class="value">'+submitted.length+'</div><div class="hint">ต้องตรวจสอบกับยอดเงินจริง</div></div>'+
+      '<div class="kpi"><div class="label">รอชำระ / ตรวจสอบเพิ่ม</div><div class="value">'+(awaiting.length+review.length)+'</div><div class="hint">ยอดคงค้าง ฿'+money(pendingAmount)+'</div></div></div>'+
+      '<div class="panel payment-panel"><div class="panel-title"><h3>รายการล่าสุดที่ต้องดำเนินการ</h3><button class="btn" data-goto="payment-transactions">ดูรายการทั้งหมด →</button></div>'+
+      paymentRowsTable(rows.filter(x=>['submitted','needs_review','awaiting_payment'].includes(x.status)).slice(0,10))+'</div>'+
+      '<div class="alert info">ต้องตรวจสอบยอดเงินจริงจากแอปธนาคารหรือ Statement ก่อนยืนยัน Paid ระบบไม่ยืนยันจากภาพสลิปหรือยอดเงินที่ตรงกันเพียงอย่างเดียว</div>';
+  }
+  function viewPaymentTransactions() {
+    const rows=state.paymentRows||[], q=String(state.paymentSearch||'').toLowerCase();
+    const filtered=rows.filter(row=>(state.paymentStatusFilter==='all'||row.status===state.paymentStatusFilter)&&(!q||[row.order_number,row.customer_name,row.transfer_reference].some(v=>String(v||'').toLowerCase().includes(q))));
+    return paymentPageHead('QR Payment Transactions','ตรวจสอบคำสั่งซื้อ สลิป และสถานะการรับเงิน')+
+      (state.paymentLoadError?'<div class="alert">'+esc(state.paymentLoadError)+'</div>':'')+
+      '<div class="panel payment-panel"><div class="toolbar payment-toolbar"><input class="search" id="payment-search" placeholder="ค้นหา Order / ลูกค้า / เลขอ้างอิง" value="'+esc(state.paymentSearch)+'"><select class="select-small" id="payment-status-filter">'+
+      [['all','ทุกสถานะ'],['awaiting_payment','รอชำระเงิน'],['submitted','รอตรวจสอบ'],['matched','ยืนยันรับเงินแล้ว'],['needs_review','ต้องตรวจสอบเพิ่ม'],['rejected','ไม่ผ่านการตรวจสอบ'],['expired','หมดเวลาชำระ']].map(([v,l])=>'<option value="'+v+'" '+(state.paymentStatusFilter===v?'selected':'')+'>'+l+'</option>').join('')+
+      '</select><span class="pill">'+filtered.length+' รายการ</span></div>'+paymentRowsTable(filtered)+'</div>';
+  }
+  function viewPaymentSettings() {
+    const p=state.paymentSettings||{}, enabled=p.qr_payment_enabled===true;
+    return paymentPageHead('QR Payment Settings','ตั้งค่าเปิด–ปิดการชำระเงินด้วย PromptPay QR ของร้าน')+
+      (state.paymentLoadError?'<div class="alert">'+esc(state.paymentLoadError)+'</div>':'')+
+      '<div class="payment-settings-grid"><section class="panel payment-panel"><div class="panel-title"><h3>สถานะการรับชำระเงิน</h3><span class="badge '+(enabled?'ok':'warn')+'">'+(enabled?'เปิดใช้งาน':'ปิดใช้งาน')+'</span></div>'+
+      '<label class="payment-switch-row"><span><b>เปิดรับชำระด้วย QR PromptPay</b><small>เมื่อปิด ลูกค้าจะเห็นข้อความให้ชำระเงินที่หน้าร้าน</small></span><input type="checkbox" id="payment-enabled" '+(enabled?'checked':'')+'></label>'+
+      '<div class="field"><label>ข้อความแนะนำการชำระเงิน</label><textarea id="payment-customer-message">'+esc(p.customer_message||'กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ')+'</textarea></div>'+
+      '<div class="field"><label>เวลารอชำระเงิน (นาที)</label><input id="payment-timeout" type="number" min="5" max="240" value="'+Number(p.payment_timeout_minutes||20)+'"></div>'+
+      '<label class="checkline"><input type="checkbox" id="payment-require-slip" '+(p.require_slip!==false?'checked':'')+'> ให้ลูกค้าแนบสลิปหลังชำระเงิน</label><div class="actions"><button class="btn primary" id="payment-save-settings">บันทึกการตั้งค่า</button></div></section>'+
+      '<section class="panel payment-panel payment-qr-preview"><div class="panel-title"><h3>QR PromptPay ของร้าน</h3></div><img src="'+esc(p.qr_image_url||PAYMENT_QR_URL)+'" alt="PromptPay QR"><div class="payment-qr-caption">ลูกค้าสแกน QR แล้วกรอกยอดเงินตาม Order</div><div class="alert info">การตรวจสอบเงินยังเป็น Manual Verification ไม่มีการอ่าน Krungsri Simple หรือ Bank API อัตโนมัติ</div></section></div>'+
+      '<div class="alert info">เมื่อปิดระบบ ลูกค้าจะเห็นข้อความ: <b>ยืนยันคำสั่งซื้อ ชำระเงินที่หน้าร้าน</b></div>';
+  }
+  async function openPaymentDetail(id) {
+    try {
+      const result=await callPaymentApi('admin-detail',{transaction_id:id});
+      const tx=result.transaction, audit=result.audit||[];
+      const proof=tx.slip_url?'<a class="payment-proof-link" href="'+esc(tx.slip_url)+'" target="_blank" rel="noopener"><img class="payment-proof-image" src="'+esc(tx.slip_url)+'" alt="หลักฐานการโอน"></a>':'<div class="empty-state">ยังไม่มีหลักฐานสลิป</div>';
+      const sh=modal('<div class="modal-head"><h3>ตรวจสอบ QR Payment · '+esc(tx.order_number)+'</h3><button class="btn" data-close>ปิด</button></div>'+
+        '<div class="payment-detail-grid"><div><div class="payment-detail-label">ยอดที่ต้องชำระ</div><strong>฿'+money(tx.expected_amount)+'</strong></div><div><div class="payment-detail-label">สถานะ</div>'+paymentStatusBadge(tx.status)+'</div><div><div class="payment-detail-label">ยอดเงินจริงที่ตรวจสอบ</div><input id="payment-actual-paid" type="number" min="0" step="0.01" value="'+(tx.paid_amount??tx.expected_amount)+'"></div><div><div class="payment-detail-label">เลขอ้างอิงธุรกรรม (ถ้ามี)</div><input id="payment-transfer-reference" value="'+esc(tx.transfer_reference||'')+'"></div></div>'+
+        '<div class="field"><label>บันทึกการตรวจสอบ</label><textarea id="payment-review-note" placeholder="เช่น ตรวจพบเงินเข้าใน Krungsri Simple เวลา...">'+esc(tx.verification_note||'')+'</textarea></div>'+proof+
+        '<p class="help">เปิดแอปธนาคารหรือ Statement ตรวจสอบยอดเงินจริง ผู้รับเงิน และรายการอ้างอิงก่อนกดยืนยัน</p>'+
+        '<div class="payment-audit"><b>ประวัติรายการ</b>'+(audit.length?audit.map(a=>'<div>'+esc(a.action_key)+' · '+esc(new Date(a.created_at).toLocaleString('th-TH'))+'</div>').join(''):'<div class="muted">ยังไม่มีประวัติ</div>')+'</div>'+
+        '<div class="modal-foot payment-review-actions"><button class="btn danger" id="payment-reject">ไม่พบเงิน / ปฏิเสธ</button><button class="btn" id="payment-needs-review">ตรวจสอบเพิ่ม</button><button class="btn primary" id="payment-match">ยืนยันรับเงิน (Paid)</button></div>');
+      sh.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('.modal-bg').remove());
+      const submitReview=async decision=>{
+        const actual=Number($('#payment-actual-paid',sh).value), reference=$('#payment-transfer-reference',sh).value.trim(), note=$('#payment-review-note',sh).value.trim();
+        if(decision==='matched'&&actual!==Number(tx.expected_amount)){toast('ยอดเงินจริงไม่ตรงกับยอด Order');return;}
+        const button=decision==='matched'?$('#payment-match',sh):decision==='rejected'?$('#payment-reject',sh):$('#payment-needs-review',sh);
+        button.disabled=true;button.textContent='กำลังบันทึก…';
+        try {
+          await callPaymentApi('admin-review',{transaction_id:id,decision,paid_amount:actual,transfer_reference:reference,note});
+          $('.modal-bg')?.remove();state.paymentLoadedBranch='';await loadPaymentRows('all');renderApp();
+          toast(decision==='matched'?'ยืนยันรับเงินเรียบร้อย':'อัปเดตผลการตรวจสอบแล้ว');
+        } catch(e) {button.disabled=false;button.textContent=decision==='matched'?'ยืนยันรับเงิน (Paid)':decision==='rejected'?'ไม่พบเงิน / ปฏิเสธ':'ตรวจสอบเพิ่ม';toast(e.message);}
+      };
+      $('#payment-match',sh).onclick=()=>submitReview('matched');
+      $('#payment-reject',sh).onclick=()=>submitReview('rejected');
+      $('#payment-needs-review',sh).onclick=()=>submitReview('needs_review');
+    } catch(e) {toast(e.message||'เปิดรายละเอียด Transaction ไม่สำเร็จ');}
+  }
+  function bindPaymentEvents() {
+    const toggle=$('#payment-nav-toggle');
+    if(toggle) toggle.onclick=()=>{
+      const sub=$('.payment-nav-sub'), open=sub?.hidden??true;
+      if(sub) sub.hidden=!open;
+      toggle.setAttribute('aria-expanded',String(open));
+    };
+    if($('#payment-refresh')) $('#payment-refresh').onclick=async()=>{
+      state.paymentLoadedBranch='';state.paymentSettingsBranch='';await ensurePaymentPageData(true);
+    };
+    if(paymentPageKeys.includes(state.page)&&state.staff?.role!=='staff'&&(state.paymentLoadedBranch!==state.branchId||state.paymentSettingsBranch!==state.branchId)&&!state.paymentLoading) {
+      state.paymentLoading=true;ensurePaymentPageData(true).finally(()=>{state.paymentLoading=false;});
+    }
+    if($('#payment-status-filter')) $('#payment-status-filter').onchange=async e=>{
+      state.paymentStatusFilter=e.target.value;
+      try {await loadPaymentRows(state.paymentStatusFilter);renderApp();} catch(err){toast(err.message);}
+    };
+    if($('#payment-search')) $('#payment-search').oninput=e=>{
+      state.paymentSearch=e.target.value;const pos=e.target.selectionStart;renderApp();const n=$('#payment-search');n?.focus();n?.setSelectionRange(pos,pos);
+    };
+    document.querySelectorAll('[data-payment-detail]').forEach(b=>b.onclick=()=>openPaymentDetail(b.dataset.paymentDetail));
+    if($('#payment-save-settings')) $('#payment-save-settings').onclick=async()=>{
+      const btn=$('#payment-save-settings');btn.disabled=true;btn.textContent='กำลังบันทึก…';
+      try {
+        const result=await callPaymentApi('admin-save-settings',{qr_payment_enabled:$('#payment-enabled').checked,qr_image_url:PAYMENT_QR_URL,customer_message:$('#payment-customer-message').value.trim(),payment_timeout_minutes:Number($('#payment-timeout').value||20),require_slip:$('#payment-require-slip').checked});
+        state.paymentSettings=result.settings;state.paymentSettingsBranch=state.branchId;renderApp();toast('บันทึก QR Payment Settings แล้ว');
+      } catch(e) {btn.disabled=false;btn.textContent='บันทึกการตั้งค่า';toast(e.message);}
+    };
+    bindPaymentEvents();
+  }
+
   function modal(html){
     const old=$('.modal-bg'); if(old) old.remove();
     document.body.insertAdjacentHTML('beforeend',`<div class="modal-bg"><section class="modal">${html}</section></div>`);
