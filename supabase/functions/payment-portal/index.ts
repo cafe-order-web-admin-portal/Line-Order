@@ -41,6 +41,27 @@ async function verifyLineToken(idToken: string, channelId: string) {
   return claims as { sub: string; name?: string };
 }
 
+
+async function resolveLineOaUrl(branchId: string, liffId: string): Promise<string | null> {
+  const { data: app } = await admin.from("line_liff_apps").select("line_login_channel_id")
+    .eq("liff_id", liffId).eq("is_active", true).maybeSingle();
+  if (!app?.line_login_channel_id) return null;
+  const { data: configs } = await admin.rpc("get_line_messaging_configs");
+  if (!Array.isArray(configs)) return null;
+  const config = (configs as Array<Record<string, unknown>>).find(x =>
+    String(x.branch_id ?? "") === branchId && String(x.line_login_channel_id ?? "") === String(app.line_login_channel_id)
+  );
+  if (!config) return null;
+  const accessToken = String(config.channel_access_token ?? "").trim()
+    || (config.use_legacy_env_credentials === true ? (Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN") ?? "").trim() : "");
+  if (!accessToken) return null;
+  const response = await fetch("https://api.line.me/v2/bot/info", { headers: { Authorization: "Bearer " + accessToken } });
+  if (!response.ok) return null;
+  const info = await response.json();
+  const basicId = String(info.basicId ?? "").trim();
+  return basicId ? "https://line.me/R/oaMessage/" + encodeURIComponent(basicId) + "/?" + encodeURIComponent("ส่งสลิปชำระเงิน") : null;
+}
+
 async function customerContext(body: Obj) {
   const idToken = str(body.id_token, 12000);
   const liffId = str(body.liff_id, 80);
@@ -109,7 +130,7 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
       .select("*").eq("branch_id", order.branch_id).maybeSingle();
     if (settingsErr || !settings) throw new Error("ยังไม่ได้ตั้งค่าการรับชำระเงินของสาขา");
     if (!settings.qr_payment_enabled) {
-      return { success: true, enabled: false, message: settings.offline_message || "ยืนยันคำสั่งซื้อ ชำระเงินที่หน้าร้าน" };
+      return { success: true, enabled: false, message: settings.offline_message || "ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า" };
     }
 
     let { data: tx, error: txErr } = await admin.from("payment_transactions")
@@ -132,15 +153,16 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
       });
     }
     if (tx.status === "matched") {
-      return { success: true, enabled: true, already_paid: true, transaction_id: tx.id, amount: tx.expected_amount };
+      const lineOaUrl = await resolveLineOaUrl(order.branch_id, str(body.liff_id, 80));
+    return { success: true, enabled: true, already_paid: true, transaction_id: tx.id, amount: tx.expected_amount };
     }
     return {
       success: true, enabled: true, transaction_id: tx.id, amount: tx.expected_amount,
       qr_image_url: settings.qr_image_url || QR_IMAGE_URL,
       customer_message: settings.customer_message || "กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ",
       require_slip: settings.require_slip !== false,
-      status: tx.status,
-      offline_message: settings.offline_message || "ยืนยันคำสั่งซื้อ ชำระเงินที่หน้าร้าน",
+      status: tx.status, line_oa_url: lineOaUrl,
+      offline_message: settings.offline_message || "ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า",
       note: "ร้านจะตรวจสอบการชำระเงินก่อนยืนยันสถานะ Paid",
     };
   }
@@ -199,7 +221,7 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     return { success: true, settings: data || {
       branch_id: ctx.branchId, qr_payment_enabled: false, qr_image_url: QR_IMAGE_URL,
       customer_message: "กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ",
-      offline_message: "ยืนยันคำสั่งซื้อ ชำระเงินที่หน้าร้าน",
+      offline_message: "ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า",
       payment_timeout_minutes: 20, require_slip: true,
     } };
   }
@@ -214,7 +236,7 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     const payload = {
       branch_id: ctx.branchId, qr_payment_enabled: qrEnabled, qr_image_url: qrUrl,
       customer_message: str(body.customer_message || "กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ", 500),
-      offline_message: "ยืนยันคำสั่งซื้อ ชำระเงินที่หน้าร้าน",
+      offline_message: "ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า",
       payment_timeout_minutes: Math.min(240, Math.max(5, Number(body.payment_timeout_minutes || 20))),
       require_slip: body.require_slip !== false, updated_by: ctx.user.id, updated_at: new Date().toISOString(),
     };
