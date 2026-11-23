@@ -266,6 +266,39 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
   const branchIdInput = str(body.branch_id, 80);
   const ctx = await requireAdmin(req, branchIdInput || undefined);
 
+  if (action === "admin-upload-qr") {
+    const ctx = await requireAdmin(req, str(body.branch_id, 80) || undefined);
+    const mime = str(body.mime_type, 80).toLowerCase();
+    if (!["image/png", "image/jpeg", "image/webp"].includes(mime)) throw new Error("รองรับไฟล์ PNG / JPG / WebP เท่านั้น");
+    const encoded = str(body.file_base64, 8 * 1024 * 1024);
+    if (!encoded || encoded.length > 7 * 1024 * 1024) throw new Error("ไฟล์ QR ใหญ่เกิน 5 MB");
+    const binary = atob(encoded);
+    if (!binary.length || binary.length > MAX_SLIP_BYTES) throw new Error("ไฟล์ QR ใหญ่เกิน 5 MB");
+    const bytes = Uint8Array.from(binary, ch => ch.charCodeAt(0));
+    const ext = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
+    const path = ctx.branchId + "/" + crypto.randomUUID() + "." + ext;
+    const { error: uploadError } = await admin.storage.from("payment-qr").upload(path, bytes, { contentType: mime, upsert: false, cacheControl: "3600" });
+    if (uploadError) throw uploadError;
+    const { data: publicData } = admin.storage.from("payment-qr").getPublicUrl(path);
+    const qrUrl = publicData.publicUrl;
+    const { data: before } = await admin.from("payment_settings").select("*").eq("branch_id", ctx.branchId).maybeSingle();
+    const payload = {
+      branch_id: ctx.branchId, qr_payment_enabled: before?.qr_payment_enabled === true,
+      qr_image_url: qrUrl, customer_message: before?.customer_message || "กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ",
+      offline_message: "ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า",
+      payment_timeout_minutes: before?.payment_timeout_minutes || 20, require_slip: before?.require_slip !== false,
+      updated_by: ctx.user.id, updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await admin.from("payment_settings").upsert(payload, { onConflict: "branch_id" }).select("*").single();
+    if (error) throw error;
+    await admin.from("payment_audit_logs").insert({
+      transaction_id: null, order_id: null, branch_id: ctx.branchId,
+      actor_ref: ctx.user.id, action_key: "payment_qr_image_updated",
+      before_state: before, after_state: { qr_image_url: qrUrl },
+    });
+    return { success: true, qr_image_url: qrUrl, settings: data };
+  }
+
   if (action === "admin-get-settings") {
     const { data, error } = await admin.from("payment_settings").select("*").eq("branch_id", ctx.branchId).maybeSingle();
     if (error) throw error;
@@ -280,8 +313,9 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
   if (action === "admin-save-settings") {
     const qrEnabled = body.qr_payment_enabled === true;
     const qrUrl = str(body.qr_image_url || QR_IMAGE_URL, 1000);
-    if (!qrUrl.startsWith("https://cafe-order-web-admin-portal.github.io/Line-Order/")) {
-      throw new Error("QR image URL ต้องเป็นไฟล์ QR ที่อยู่บนเว็บไซต์ร้านเท่านั้น");
+    const allowedQrPrefix = SUPABASE_URL + "/storage/v1/object/public/payment-qr/";
+    if (!qrUrl.startsWith("https://cafe-order-web-admin-portal.github.io/Line-Order/") && !qrUrl.startsWith(allowedQrPrefix)) {
+      throw new Error("QR image URL ไม่ใช่ไฟล์ QR ที่ระบบอนุญาต");
     }
     const { data: before } = await admin.from("payment_settings").select("*").eq("branch_id", ctx.branchId).maybeSingle();
     const payload = {

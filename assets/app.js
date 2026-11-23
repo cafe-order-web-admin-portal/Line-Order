@@ -454,6 +454,7 @@
       dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
       dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');const f=e.dataTransfer.files?.[0];if(!f)return;const dt=new DataTransfer();dt.items.add(f);fi.files=dt.files;const lab=$('#selected-file');if(lab)lab.textContent=f.name;});
     }
+    bindPaymentEvents();
   }
 
 
@@ -550,8 +551,8 @@
       '<label class="payment-switch-row"><span><b>เปิดรับชำระด้วย QR PromptPay</b><small>เมื่อปิด ลูกค้าจะเห็นข้อความให้ชำระเงินที่หน้าร้าน</small></span><input type="checkbox" id="payment-enabled" '+(enabled?'checked':'')+'></label>'+
       '<div class="field"><label>ข้อความแนะนำการชำระเงิน</label><textarea id="payment-customer-message">'+esc(p.customer_message||'กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ')+'</textarea></div>'+
       '<div class="field"><label>เวลารอชำระเงิน (นาที)</label><input id="payment-timeout" type="number" min="5" max="240" value="'+Number(p.payment_timeout_minutes||20)+'"></div>'+
-      '<div class="alert info">ลูกค้าชำระเงินด้วย QR แล้วกด “ส่งสลิปผ่าน LINE” เพื่อส่งรูปเข้า LINE OA ของสาขาโดยตรง พนักงานตรวจสอบยอดเงินจริงก่อนยืนยัน Paid</div><div class="actions"><button class="btn primary" id="payment-save-settings">บันทึกการตั้งค่า</button></div></section>'+
-      '<section class="panel payment-panel payment-qr-preview"><div class="panel-title"><h3>QR PromptPay ของร้าน</h3></div><img src="'+esc(p.qr_image_url||PAYMENT_QR_URL)+'" alt="PromptPay QR"><div class="payment-qr-caption">ลูกค้าสแกน QR แล้วกรอกยอดเงินตาม Order</div><div class="alert info">การตรวจสอบเงินยังเป็น Manual Verification ไม่มีการอ่าน Krungsri Simple หรือ Bank API อัตโนมัติ</div></section></div>'+
+      '<div class="alert info">ลูกค้าชำระเงินด้วย QR แล้วส่งสลิปในแชต LINE OA ได้ พนักงานตรวจสอบยอดเงินจริงก่อนยืนยัน Paid</div><div class="actions"><button class="btn primary" id="payment-save-settings">บันทึกการตั้งค่า</button></div></section>'+
+      '<section class="panel payment-panel payment-qr-preview"><div class="panel-title"><h3>QR PromptPay ของร้าน</h3></div><img id="payment-qr-preview-image" src="'+esc(p.qr_image_url||PAYMENT_QR_URL)+'" alt="PromptPay QR"><div class="field"><label for="payment-qr-file">เลือกรูป QR PromptPay (PNG / JPG / WebP ไม่เกิน 5 MB)</label><input id="payment-qr-file" type="file" accept="image/png,image/jpeg,image/webp"></div><div class="actions"><button class="btn primary" id="payment-save-qr">บันทึก QR</button></div><div class="payment-qr-caption">รูป QR ที่บันทึกจะถูกใช้กับลูกค้าทุกคำสั่งซื้อของสาขานี้</div><div class="alert info">การตรวจสอบเงินยังเป็น Manual Verification ไม่มีการอ่าน Krungsri Simple หรือ Bank API อัตโนมัติ</div></section></div>'+
       '<div class="alert info">เมื่อปิดระบบ ลูกค้าจะไม่เห็น QR และจะแสดงข้อความ: <b>ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า</b></div>';
   }
   async function openPaymentDetail(id) {
@@ -607,14 +608,25 @@
       state.paymentSearch=e.target.value;const pos=e.target.selectionStart;renderApp();const n=$('#payment-search');n?.focus();n?.setSelectionRange(pos,pos);
     };
     document.querySelectorAll('[data-payment-detail]').forEach(b=>b.onclick=()=>openPaymentDetail(b.dataset.paymentDetail));
+    if($('#payment-save-qr')) $('#payment-save-qr').onclick=async()=>{
+      const btn=$('#payment-save-qr'),file=$('#payment-qr-file')?.files?.[0];
+      if(!file){toast('กรุณาเลือกรูป QR ก่อน');return;}
+      if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>5*1024*1024){toast('รองรับ PNG / JPG / WebP ไม่เกิน 5 MB');return;}
+      btn.disabled=true;btn.textContent='กำลังบันทึก QR…';
+      try{
+        const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+        const result=await callPaymentApi('admin-upload-qr',{mime_type:file.type,file_base64:btoa(binary),file_name:file.name});
+        state.paymentSettings={...(state.paymentSettings||{}),qr_image_url:result.qr_image_url};state.paymentSettingsBranch=state.branchId;
+        renderApp();toast('บันทึก QR PromptPay เรียบร้อยแล้ว');
+      }catch(e){btn.disabled=false;btn.textContent='บันทึก QR';toast(e.message||'บันทึก QR ไม่สำเร็จ');}
+    };
     if($('#payment-save-settings')) $('#payment-save-settings').onclick=async()=>{
       const btn=$('#payment-save-settings');btn.disabled=true;btn.textContent='กำลังบันทึก…';
       try {
-        const result=await callPaymentApi('admin-save-settings',{qr_payment_enabled:$('#payment-enabled').checked,qr_image_url:PAYMENT_QR_URL,customer_message:$('#payment-customer-message').value.trim(),payment_timeout_minutes:Number($('#payment-timeout').value||20),require_slip:true});
+        const result=await callPaymentApi('admin-save-settings',{qr_payment_enabled:$('#payment-enabled').checked,qr_image_url:state.paymentSettings?.qr_image_url||PAYMENT_QR_URL,customer_message:$('#payment-customer-message').value.trim(),payment_timeout_minutes:Number($('#payment-timeout').value||20),require_slip:true});
         state.paymentSettings=result.settings;state.paymentSettingsBranch=state.branchId;renderApp();toast('บันทึก QR Payment Settings แล้ว');
       } catch(e) {btn.disabled=false;btn.textContent='บันทึกการตั้งค่า';toast(e.message);}
     };
-    bindPaymentEvents();
   }
 
   function modal(html){

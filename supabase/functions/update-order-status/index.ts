@@ -144,6 +144,32 @@ Deno.serve(async (req: Request) => {
       } else {
         orderBranchId = orderMeta?.branch_id ?? null;
       }
+
+      if (String(result.order_status ?? newStatus) === "cancelled") {
+        const { data: openPayments, error: paymentLookupError } = await admin
+          .from("payment_transactions").select("id,branch_id,status")
+          .eq("order_id", result.order_id).in("status", ["awaiting_payment", "rejected"]);
+        if (paymentLookupError) {
+          console.error("Cancelled order payment lookup failed:", paymentLookupError.code, paymentLookupError.message);
+        } else if (openPayments?.length) {
+          const now = new Date().toISOString();
+          const ids = openPayments.map(row => row.id);
+          const { error: expireError } = await admin.from("payment_transactions")
+            .update({ status: "expired", updated_at: now, verification_note: "Order cancelled by store." })
+            .in("id", ids).in("status", ["awaiting_payment", "rejected"]);
+          if (expireError) {
+            console.error("Cancelled order payment expiry failed:", expireError.code, expireError.message);
+          } else {
+            await admin.from("orders").update({ payment_status: "cancelled" }).eq("id", result.order_id);
+            const { error: auditError } = await admin.from("payment_audit_logs").insert(openPayments.map(row => ({
+              transaction_id: row.id, order_id: result.order_id, branch_id: row.branch_id,
+              actor_ref: "system:order-cancelled", action_key: "payment_expired_order_cancelled",
+              before_state: { status: row.status }, after_state: { status: "expired", reason: "order_cancelled" },
+            })));
+            if (auditError) console.error("Cancelled order payment audit failed:", auditError.code, auditError.message);
+          }
+        }
+      }
     }
 
     let token = "";
