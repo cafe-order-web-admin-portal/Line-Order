@@ -153,9 +153,9 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
       });
     }
     if (tx.status === "matched") {
-      const lineOaUrl = await resolveLineOaUrl(order.branch_id, str(body.liff_id, 80));
-    return { success: true, enabled: true, already_paid: true, transaction_id: tx.id, amount: tx.expected_amount };
+      return { success: true, enabled: true, already_paid: true, transaction_id: tx.id, amount: tx.expected_amount };
     }
+    const lineOaUrl = await resolveLineOaUrl(order.branch_id, str(body.liff_id, 80));
     return {
       success: true, enabled: true, transaction_id: tx.id, amount: tx.expected_amount,
       qr_image_url: settings.qr_image_url || QR_IMAGE_URL,
