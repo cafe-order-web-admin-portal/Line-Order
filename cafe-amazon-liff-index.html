@@ -958,6 +958,10 @@ main{
   .chip-label{font-size:12px}
 }
 
+
+/* Keep customers focused on payment; allow a deliberate return to add items. */
+body.payment-pending main>.section-title,body.payment-pending #categories,body.payment-pending #products,body.payment-pending .cartbar{display:none!important}
+body.payment-pending main{padding-top:16px}
 </style>
 </head>
 <body>
@@ -1020,6 +1024,7 @@ const PAYMENT_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v
 const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{};
 const db=(cfg.url&&cfg.publishableKey&&window.supabase)?window.supabase.createClient(cfg.url,cfg.publishableKey):null;
 let profile=null,allProducts=[],activeCategory='all',cart=new Map();
+let pendingPaymentOrder=null,editingPendingOrder=false;
 let optionGroups=[],optionChoices=[],productGroupLinks=[],productOptionLinks=[],currentProduct=null;
 let activeRequestId=null;
 let locationWatchId=null, activeLocationOrderId=null, lastLocationSentAt=0, lastSentLocation=null, locationSending=false;
@@ -1325,34 +1330,100 @@ function customerPaymentPanel(payment){
     '<div style="font-size:13px;color:#66766b">ยอดที่ต้องชำระ</div><strong style="display:block;font-size:26px;color:#087b48">฿'+money(payment.amount)+'</strong>'+
     '<p style="font-size:11px;color:#75847a;margin:3px 0 12px">ชำระเงินแล้ว ส่งรูปสลิปในแชท LINE OA ได้ทันที</p>'+
     (lineUrl?'<button type="button" onclick="openBranchLineOa(\''+esc(lineUrl)+'\')" style="display:block;width:100%;box-sizing:border-box;margin-top:12px;padding:16px 14px;background:linear-gradient(100deg,#06a65b,#087544);color:#fff;border:0;border-radius:13px;font-weight:700;font-size:15px;box-shadow:0 5px 14px #08754435">💬 เปิด LINE OA เพื่อส่งสลิป</button><a href="'+esc(lineUrl)+'" target="_blank" rel="noopener" style="display:block;margin-top:9px;padding:10px;border:1px solid #087544;border-radius:10px;color:#087544;font-weight:700;text-decoration:none">↗ เปิดแชท LINE OA อีกครั้ง</a>':'<div style="padding:11px;background:#fff5e8;border-radius:9px;color:#805500;font-size:12px">ยังไม่พบลิงก์ LINE OA ของสาขา กรุณากลับไปที่แชท LINE OA แล้วส่งรูปสลิป</div>')+
-    '<p style="font-size:10px;color:#79867d;margin:10px 0 0">ร้านจะยืนยันการชำระเงินหลังตรวจสอบยอดเงินจริงเท่านั้น</p></section>';
+    '<p style="font-size:10px;color:#79867d;margin:10px 0 0">ร้านจะยืนยันการชำระเงินหลังตรวจสอบยอดเงินจริงเท่านั้น</p>'+
+    (payment.status==='awaiting_payment'?'<p style="margin:12px 0 5px;color:#8a5a20;font-size:11px;line-height:1.5">หากยังไม่ได้โอนเงิน สามารถกลับไปเพิ่มสินค้าได้ ยอดชำระจะคำนวณใหม่ · หากโอนแล้ว กรุณาส่งสลิปทันที</p><button type="button" onclick="returnToAddItems()" style="display:block;width:100%;margin-top:8px;padding:13px 14px;border:1px solid #176b45;border-radius:12px;background:#fff;color:#176b45;font-weight:700;font-size:14px">＋ กลับไปเลือกสินค้าเพิ่ม</button>':'')+
+    '</section>';
 }
 
 
 async function openBranchLineOa(url){try{const target=new URL(String(url||''));if(target.hostname!=='line.me')throw new Error('LINE OA link is invalid');if(window.liff&&typeof window.liff.openWindow==='function'&&window.liff.isInClient()){window.liff.openWindow({url:target.href,external:true});return;}window.location.href=target.href;}catch(error){console.error('Open LINE OA failed:',error);alert('ไม่สามารถเปิด LINE OA ได้ กรุณาปิดหน้าสั่งซื้อแล้วกลับไปที่แชท LINE OA ของสาขา');}}
+function showOrderPaymentReceipt(order,payment){
+  $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(order.order_number||'-')+'</b><br>ยอดรวม: '+money(order.total_amount)+'<br>สถานะ: '+esc(statusLabel[order.order_status]||order.order_status||'รอยืนยัน')+customerPaymentPanel(payment);
+  $('receipt').classList.add('show');
+  if(payment?.success===true&&payment.enabled===true&&payment.status==='awaiting_payment'){
+    document.body.classList.add('payment-pending');
+  }else{
+    document.body.classList.remove('payment-pending');
+  }
+}
+async function returnToAddItems(){
+  if(!pendingPaymentOrder||editingPendingOrder)return;
+  const idToken=getLineIdToken();
+  if(!idToken){alert('เซสชัน LINE หมดอายุ กรุณาปิดหน้าแล้วเปิดจาก LINE OA อีกครั้ง');return;}
+  const latest=await initCustomerPayment({order_id:pendingPaymentOrder.order_id},idToken);
+  if(latest?.enabled!==true||latest.status!=='awaiting_payment'){
+    pendingPaymentOrder.paymentInfo=latest;
+    showOrderPaymentReceipt(pendingPaymentOrder.order,latest);
+    alert('คำสั่งซื้อนี้มีการส่งสลิปหรือเปลี่ยนสถานะแล้ว จึงไม่สามารถเพิ่มสินค้าได้');
+    return;
+  }
+  pendingPaymentOrder.paymentInfo=latest;
+  cart=new Map(pendingPaymentOrder.cartSnapshot.map(line=>[line.key,{...line,optionIds:[...line.optionIds]}]));
+  editingPendingOrder=true;
+  document.body.classList.remove('payment-pending');
+  $('receipt').classList.remove('show');
+  $('confirm-order').textContent='อัปเดตคำสั่งซื้อและไปชำระเงิน';
+  updateCart();renderProducts();
+  setStatus('เพิ่มสินค้าในคำสั่งซื้อเดิมได้เลย · เมื่อเสร็จแล้วกดยืนยันเพื่อคำนวณยอดใหม่');
+  $('products').scrollIntoView({behavior:'smooth',block:'start'});
+}
 async function submitOrder(){
   $('order-error').textContent='';
   const idToken=getLineIdToken();
   if(!idToken){$('order-error').textContent='เซสชัน LINE หมดอายุ กรุณารีเฟรชหน้าเพื่อเข้าสู่ระบบอีกครั้ง';return;}
   if(!cart.size){$('order-error').textContent='กรุณาเลือกสินค้าอย่างน้อย 1 รายการ';return;}
   const items=[...cart.values()].map(x=>({product_id:x.product.id,quantity:x.qty,option_ids:x.optionIds}));
-  const button=$('confirm-order');button.disabled=true;button.textContent='กำลังส่งคำสั่งซื้อ…';
-  if(!activeRequestId)activeRequestId=crypto.randomUUID();
+  const snapshot=[...cart.values()].map(x=>({...x,optionIds:[...x.optionIds]}));
+  const button=$('confirm-order');button.disabled=true;
+  button.textContent=editingPendingOrder?'กำลังคำนวณยอดคำสั่งซื้อใหม่…':'กำลังส่งคำสั่งซื้อ…';
   try{
-    // Read location only after explicit consent after LINE login; GPS failure never blocks checkout.
+    if(editingPendingOrder&&pendingPaymentOrder){
+      const response=await fetch(PAYMENT_FUNCTION_URL,{
+        method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
+        body:JSON.stringify({action:'customer-update-order',id_token:idToken,liff_id:LINE_LIFF_ID,order_id:pendingPaymentOrder.order_id,items})
+      });
+      const data=await response.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
+      if(!response.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถอัปเดตคำสั่งซื้อได้');
+      pendingPaymentOrder.order={...pendingPaymentOrder.order,...data.order};
+      pendingPaymentOrder.cartSnapshot=snapshot;
+      pendingPaymentOrder.paymentInfo=data.payment;
+      cart.clear();editingPendingOrder=false;activeRequestId=null;updateCart();hideModal('cart-modal');
+      $('confirm-order').textContent='ยืนยันคำสั่งซื้อ';
+      showOrderPaymentReceipt(pendingPaymentOrder.order,pendingPaymentOrder.paymentInfo);
+      await loadMyOrders(false);
+      $('receipt').scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+
+    if(!activeRequestId)activeRequestId=crypto.randomUUID();
     const checkoutPosition=hasLocationConsent()?await getCurrentPosition().catch(e=>{console.info('Location not shared:',e.message);return null;}):null;
     const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),liff_id:LINE_LIFF_ID,items})});
     const result=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
     if(!res.ok||result.success!==true)throw new Error(result.error||'ไม่สามารถสร้างคำสั่งซื้อได้');
     const paymentInfo=await initCustomerPayment(result,idToken);
+    if(paymentInfo?.success===true&&paymentInfo.enabled===true&&paymentInfo.status==='awaiting_payment'){
+      pendingPaymentOrder={order_id:result.order_id,order:{...result},cartSnapshot:snapshot,paymentInfo};
+    }else{
+      pendingPaymentOrder=null;
+    }
     cart.clear();activeRequestId=null;updateCart();hideModal('cart-modal');
-    $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: '+money(result.total_amount)+'<br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน')+customerPaymentPanel(paymentInfo);
-    $('receipt').classList.add('show');
-await loadMyOrders(false);
+    $('confirm-order').textContent='ยืนยันคำสั่งซื้อ';
+    showOrderPaymentReceipt(result,paymentInfo);
+    await loadMyOrders(false);
     if(result.order_id&&checkoutPosition)await startLocationSharing(result.order_id,true,true,checkoutPosition);
     $('receipt').scrollIntoView({behavior:'smooth',block:'center'});
-  }catch(e){console.error('Order submit:',e);$('order-error').textContent=e.message||'เกิดข้อผิดพลาด กรุณาลองอีกครั้ง';}
-  finally{button.disabled=false;button.textContent='ยืนยันคำสั่งซื้อ';}
+  }catch(e){
+    console.error('Order submit/update:',e);
+    $('order-error').textContent=e.message||'เกิดข้อผิดพลาด กรุณาลองอีกครั้ง';
+    if(editingPendingOrder&&/payment has already been submitted|no longer editable|state changed/i.test(String(e.message||''))){
+      const latest=await initCustomerPayment({order_id:pendingPaymentOrder.order_id},idToken).catch(()=>null);
+      if(latest){pendingPaymentOrder.paymentInfo=latest;cart.clear();editingPendingOrder=false;updateCart();hideModal('cart-modal');showOrderPaymentReceipt(pendingPaymentOrder.order,latest);}
+    }
+  }finally{
+    button.disabled=false;
+    if(!editingPendingOrder)button.textContent='ยืนยันคำสั่งซื้อ';
+    else button.textContent='อัปเดตคำสั่งซื้อและไปชำระเงิน';
+  }
 }
 function renderCustomerTimeline(order){
   const history=Array.isArray(order.status_history)?order.status_history:[];
@@ -1475,7 +1546,7 @@ $('menu-search').addEventListener('input',renderProducts);
 $('menu-filter-toggle').addEventListener('click',()=>{const target=$('categories');if(target){target.scrollIntoView({behavior:'smooth',block:'center'});target.classList.add('filter-focus');setTimeout(()=>target.classList.remove('filter-focus'),850);}});
 $('products').addEventListener('click',e=>{const b=e.target.closest('[data-add]');if(!b||b.disabled)return;const p=allProducts.find(x=>String(x.id)===b.dataset.add);if(p?.can_order)openProductOptions(p);});
 $('add-configured').onclick=()=>{const ids=collectOptions();if(ids!==null)addConfiguredProduct(ids);};
-$('checkout').onclick=()=>{renderCart();showModal('cart-modal');};
+$('checkout').onclick=()=>{renderCart();$('confirm-order').textContent=editingPendingOrder?'อัปเดตคำสั่งซื้อและไปชำระเงิน':'ยืนยันคำสั่งซื้อ';showModal('cart-modal');};
 $('confirm-order').onclick=submitOrder;
 // First-login consent triggers the native location prompt only after the customer taps Allow.
 $('refresh-button').onclick=loadMenu;

@@ -187,7 +187,7 @@ Deno.serve(async (req: Request) => {
         const digest = await crypto.subtle.digest("SHA-256", bytes);
         const hash = Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, "0")).join("");
         const { data: candidates, error: txError } = await admin.from("payment_transactions")
-          .select("id,order_id,order_number,status,slip_sha256")
+          .select("id,order_id,order_number,status,slip_sha256,updated_at")
           .eq("branch_id", branchId).eq("customer_line_user_id", lineUserId)
           .in("status", ["awaiting_payment", "rejected"]).order("created_at", { ascending: false }).limit(2);
         if (txError) throw txError;
@@ -198,7 +198,11 @@ Deno.serve(async (req: Request) => {
           message = "พบคำสั่งซื้อที่รอชำระเงินมากกว่า 1 รายการครับ กรุณาส่งสลิปหลังชำระทีละคำสั่งซื้อ เพื่อป้องกันการจับคู่ผิดรายการ";
         } else {
           const tx = candidates[0];
-          if (tx.slip_sha256 === hash) {
+          const eventTime = Number(event.timestamp);
+          const amountUpdatedAt = Date.parse(String(tx.updated_at ?? ""));
+          if (Number.isFinite(eventTime) && Number.isFinite(amountUpdatedAt) && eventTime < amountUpdatedAt) {
+            message = "คำสั่งซื้อมีการเปลี่ยนแปลงยอดหลังจากส่งภาพนี้ครับ กรุณาตรวจสอบยอดล่าสุดในหน้าคำสั่งซื้อและโอนตามยอดใหม่ก่อนส่งสลิปอีกครั้ง";
+          } else if (tx.slip_sha256 === hash) {
             message = "ได้รับสลิปนี้เรียบร้อยแล้วครับ ร้านกำลังตรวจสอบยอดเงินจริง";
           } else {
             const { data: duplicate, error: duplicateError } = await admin.from("payment_transactions")
