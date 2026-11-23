@@ -167,6 +167,56 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     };
   }
 
+  if (action === "customer-update-order") {
+    const { claims, order } = await customerContext(body);
+    const rawItems = body.items;
+    if (!Array.isArray(rawItems) || rawItems.length < 1 || rawItems.length > 30) {
+      throw new Error("กรุณาเลือกสินค้า 1 ถึง 30 รายการ");
+    }
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const items = rawItems.map((raw) => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("รายการสินค้าไม่ถูกต้อง");
+      const item = raw as Obj;
+      const productId = str(item.product_id, 80);
+      const quantity = Number(item.quantity);
+      const optionIds = item.option_ids === undefined ? [] : item.option_ids;
+      if (!uuidPattern.test(productId) || !Number.isInteger(quantity) || quantity < 1 || quantity > 50) {
+        throw new Error("รหัสสินค้าหรือจำนวนสินค้าไม่ถูกต้อง");
+      }
+      if (!Array.isArray(optionIds) || optionIds.length > 12 || !optionIds.every((id) => typeof id === "string" && uuidPattern.test(id))) {
+        throw new Error("ตัวเลือกสินค้าไม่ถูกต้อง");
+      }
+      return { product_id: productId, quantity, option_ids: optionIds as string[] };
+    });
+    const { data: updated, error: updateError } = await admin.rpc("update_liff_order_before_payment", {
+      p_order_id: order.id,
+      p_line_user_id: claims.sub,
+      p_items: items,
+    });
+    if (updateError || !updated?.success) {
+      throw new Error(updateError?.message || "ไม่สามารถแก้ไขคำสั่งซื้อได้ กรุณาตรวจสอบสถานะการชำระเงิน");
+    }
+    const [{ data: tx, error: txError }, { data: settings, error: settingsError }] = await Promise.all([
+      admin.from("payment_transactions").select("*").eq("id", (await admin.from("payment_transactions").select("id").eq("order_id", order.id).eq("customer_line_user_id", claims.sub).maybeSingle()).data?.id || "").maybeSingle(),
+      admin.from("payment_settings").select("*").eq("branch_id", order.branch_id).maybeSingle(),
+    ]);
+    if (txError || !tx || tx.status !== "awaiting_payment") throw new Error("สถานะการชำระเงินเปลี่ยนแปลงแล้ว กรุณารีเฟรชหน้า");
+    if (settingsError || !settings || settings.qr_payment_enabled !== true) throw new Error("สาขานี้ปิดรับชำระเงิน QR แล้ว");
+    const lineOaUrl = await resolveLineOaUrl(order.branch_id, str(body.liff_id, 80));
+    return {
+      success: true,
+      order: updated,
+      payment: {
+        success: true, enabled: true, transaction_id: tx.id, amount: tx.expected_amount,
+        qr_image_url: settings.qr_image_url || QR_IMAGE_URL,
+        customer_message: settings.customer_message || "กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ",
+        require_slip: settings.require_slip !== false, status: tx.status, line_oa_url: lineOaUrl,
+        offline_message: settings.offline_message || "ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า",
+        note: "ร้านจะตรวจสอบการชำระเงินก่อนยืนยันสถานะ Paid",
+      },
+    };
+  }
+
   if (action === "customer-submit-proof") {
     const { claims, order } = await customerContext(body);
     const transactionId = str(body.transaction_id, 80);
