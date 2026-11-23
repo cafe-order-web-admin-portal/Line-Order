@@ -160,6 +160,12 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     if (tx.status === "matched") throw new Error("รายการนี้ตรวจสอบและยืนยันการชำระเงินแล้ว");
     const bytes = Uint8Array.from(atob(base64.replace(/^data:[^,]+,/, "")), c => c.charCodeAt(0));
     if (!bytes.length || bytes.length > MAX_SLIP_BYTES) throw new Error("ไฟล์สลิปต้องมีขนาดไม่เกิน 5 MB");
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const slipHash = Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, "0")).join("");
+    const { data: duplicateSlip, error: duplicateSlipErr } = await admin.from("payment_transactions")
+      .select("id,order_number").eq("slip_sha256", slipHash).neq("id", tx.id).maybeSingle();
+    if (duplicateSlipErr) throw duplicateSlipErr;
+    if (duplicateSlip) throw new Error("ภาพสลิปนี้ถูกส่งใช้กับ Order " + duplicateSlip.order_number + " แล้ว");
     const ext = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
     const path = order.branch_id + "/" + order.id + "/" + crypto.randomUUID() + "." + ext;
     const { error: uploadErr } = await admin.storage.from("payment-proofs").upload(path, bytes, {
@@ -168,7 +174,7 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     if (uploadErr) throw uploadErr;
     const before = { status: tx.status, slip_path: tx.slip_path };
     const { error: updateErr } = await admin.from("payment_transactions").update({
-      status: "submitted", slip_path: path, transfer_reference: reference || null,
+      status: "submitted", slip_path: path, slip_sha256: slipHash, transfer_reference: reference || null,
       transfer_at: transferAt ? new Date(transferAt).toISOString() : null,
       submitted_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       verification_note: null, paid_amount: null, verified_by: null, verified_at: null,
