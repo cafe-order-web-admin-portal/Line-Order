@@ -1016,6 +1016,7 @@ const EXTERNAL_RETURN_KEY='ca_external_order_return_v1';
 const ORDER_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/create-order';
 const TRACK_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/my-orders';
 const LOCATION_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/share-customer-location';
+const PAYMENT_FUNCTION_URL='https://ytxbnqosenolojifeikf.supabase.co/functions/v1/payment-portal';
 const cfg=window.CAFE_AMAZON_SUPABASE_CONFIG||{};
 const db=(cfg.url&&cfg.publishableKey&&window.supabase)?window.supabase.createClient(cfg.url,cfg.publishableKey):null;
 let profile=null,allProducts=[],activeCategory='all',cart=new Map();
@@ -1295,6 +1296,76 @@ function renderCart(){
   }).join('');
   $('modal-total').textContent=$('cart-total').textContent;
 }
+
+async function initCustomerPayment(orderResult,idToken){
+  try{
+    const response=await fetch(PAYMENT_FUNCTION_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
+      body:JSON.stringify({action:'customer-init',id_token:idToken,liff_id:LINE_LIFF_ID,order_id:orderResult.order_id})
+    });
+    const data=await response.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
+    if(!response.ok||data.success!==true)throw new Error(data.error||'ไม่สามารถเตรียมข้อมูลการชำระเงินได้');
+    return data;
+  }catch(error){
+    console.error('Payment init:',error);
+    return {success:false,enabled:false,error:error.message||'ระบบชำระเงินยังไม่พร้อม'};
+  }
+}
+function customerPaymentPanel(payment){
+  if(!payment||payment.success!==true){
+    return '<div style="margin-top:12px;padding:13px;border:1px solid #f1dfba;border-radius:12px;background:#fff9ec;color:#815400"><b>การชำระเงินออนไลน์ยังไม่พร้อม</b><br>กรุณาติดต่อร้านหรือชำระเงินที่หน้าร้าน</div>';
+  }
+  if(payment.enabled!==true){
+    return '<div style="margin-top:12px;padding:13px;border-radius:12px;background:#eef7f0;color:#165c38;font-weight:700">ยืนยันคำสั่งซื้อ ชำระเงินที่หน้าร้าน</div>';
+  }
+  if(payment.already_paid){
+    return '<div style="margin-top:12px;padding:13px;border-radius:12px;background:#e9f7ef;color:#17683d;font-weight:700">ร้านยืนยันรับชำระเงินแล้ว</div>';
+  }
+  if(payment.status==='submitted'){
+    return '<div style="margin-top:12px;padding:13px;border:1px solid #f0dfb7;border-radius:12px;background:#fff9ec;color:#805500"><b>ได้รับหลักฐานการชำระเงินแล้ว</b><br>ร้านกำลังตรวจสอบยอดเงินจริง กรุณาเก็บหลักฐานการโอนไว้</div>';
+  }
+  const url=String(payment.qr_image_url||'');
+  return '<section id="customer-payment-box" style="margin-top:14px;padding:14px;border:1px solid #dce9df;border-radius:14px;background:#f7fbf8;color:#21372a;text-align:center">'+
+    '<b style="display:block;font-size:16px;color:#075b39">ชำระเงินผ่าน PromptPay</b>'+
+    '<p style="font-size:13px;margin:5px 0 10px">'+esc(payment.customer_message||'กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ')+'</p>'+
+    '<img src="'+esc(url)+'" alt="PromptPay QR" style="display:block;width:min(260px,85%);aspect-ratio:1/1;object-fit:contain;margin:0 auto 10px;background:#fff;border:1px solid #e2e9e4;border-radius:12px">'+
+    '<div style="font-size:13px;color:#66766b">ยอดที่ต้องชำระ</div><strong style="display:block;font-size:26px;color:#087b48">฿'+money(payment.amount)+'</strong>'+
+    '<p style="font-size:11px;color:#75847a;margin:3px 0 12px">สแกน QR และกรอกยอดเงินตามจำนวนที่แสดง</p>'+
+    '<div style="text-align:left"><label style="display:block;font-size:12px;font-weight:600;margin:8px 0 5px">แนบสลิปการโอนเงิน</label><input id="customer-payment-slip" type="file" accept="image/jpeg,image/png,image/webp" style="display:block;width:100%;font-size:12px">'+
+    '<label style="display:block;font-size:12px;font-weight:600;margin:10px 0 5px">เลขอ้างอิงธุรกรรม (ถ้ามี)</label><input id="customer-payment-reference" type="text" maxlength="140" placeholder="กรอกเลขอ้างอิงจากธนาคาร" style="display:block;width:100%;padding:10px;border:1px solid #d6e2d9;border-radius:9px">'+
+    '<label style="display:block;font-size:12px;font-weight:600;margin:10px 0 5px">วันและเวลาโอน (ถ้าทราบ)</label><input id="customer-payment-time" type="datetime-local" style="display:block;width:100%;padding:10px;border:1px solid #d6e2d9;border-radius:9px">'+
+    '<button id="customer-payment-submit" type="button" style="width:100%;margin-top:12px;padding:12px;background:#087544;color:#fff;border:0;border-radius:10px;font-weight:700">แจ้งชำระเงินและส่งสลิป</button>'+
+    '<div id="customer-payment-feedback" style="font-size:12px;margin-top:8px;color:#596b5f"></div></div>'+
+    '<p style="font-size:10px;color:#79867d;margin:10px 0 0">สถานะจะเปลี่ยนเป็นชำระแล้วหลังร้านตรวจสอบยอดเงินจริงเท่านั้น</p></section>';
+}
+async function submitCustomerPaymentProof(payment,orderResult,idToken){
+  const button=$('customer-payment-submit'),feedback=$('customer-payment-feedback'),file=$('customer-payment-slip')?.files?.[0];
+  if(!file){feedback.textContent='กรุณาแนบภาพสลิปก่อนส่ง';return;}
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type)){feedback.textContent='รองรับไฟล์ JPG, PNG หรือ WebP เท่านั้น';return;}
+  if(file.size>3.5*1024*1024){feedback.textContent='กรุณาใช้ไฟล์สลิปไม่เกิน 3.5 MB';return;}
+  button.disabled=true;button.textContent='กำลังส่งหลักฐาน…';feedback.textContent='';
+  try{
+    const dataUrl=await new Promise((resolve,reject)=>{
+      const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('อ่านไฟล์สลิปไม่สำเร็จ'));reader.readAsDataURL(file);
+    });
+    const transferTime=$('customer-payment-time')?.value;
+    const response=await fetch(PAYMENT_FUNCTION_URL,{
+      method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},
+      body:JSON.stringify({
+        action:'customer-submit-proof',id_token:idToken,liff_id:LINE_LIFF_ID,order_id:orderResult.order_id,
+        transaction_id:payment.transaction_id,mime_type:file.type,file_base64:String(dataUrl).split(',')[1],
+        transfer_reference:$('customer-payment-reference')?.value.trim()||'',
+        transfer_at:transferTime?new Date(transferTime).toISOString():''
+      })
+    });
+    const result=await response.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
+    if(!response.ok||result.success!==true)throw new Error(result.error||'ส่งหลักฐานไม่สำเร็จ');
+    const box=$('customer-payment-box');
+    if(box)box.innerHTML='<div style="padding:16px;background:#fff9ec;border-radius:10px;color:#805500"><b>ส่งหลักฐานเรียบร้อยแล้ว</b><br>ร้านกำลังตรวจสอบยอดเงินจริง กรุณาเก็บหลักฐานการโอนไว้</div>';
+  }catch(error){feedback.textContent=error.message||'เกิดข้อผิดพลาด';button.disabled=false;button.textContent='แจ้งชำระเงินและส่งสลิป';}
+}
+
 async function submitOrder(){
   $('order-error').textContent='';
   const idToken=getLineIdToken();
@@ -1309,9 +1380,14 @@ async function submitOrder(){
     const res=await fetch(ORDER_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.publishableKey},body:JSON.stringify({id_token:idToken,request_id:activeRequestId,customer_name:$('customer-name').value.trim(),phone:$('customer-phone').value.trim(),customer_note:$('customer-note').value.trim(),liff_id:LINE_LIFF_ID,items})});
     const result=await res.json().catch(()=>({error:'ระบบตอบกลับไม่ถูกต้อง'}));
     if(!res.ok||result.success!==true)throw new Error(result.error||'ไม่สามารถสร้างคำสั่งซื้อได้');
+    const paymentInfo=await initCustomerPayment(result,idToken);
     cart.clear();activeRequestId=null;updateCart();hideModal('cart-modal');
-    $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: '+money(result.total_amount)+'<br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน');
+    $('receipt').innerHTML='<b>รับคำสั่งซื้อเรียบร้อยแล้ว</b><br>เลขที่ออเดอร์: <b>'+esc(result.order_number||'-')+'</b><br>ยอดรวม: '+money(result.total_amount)+'<br>สถานะ: '+esc(statusLabel[result.order_status]||result.order_status||'รอยืนยัน')+customerPaymentPanel(paymentInfo);
     $('receipt').classList.add('show');
+    if(paymentInfo?.enabled===true&&!paymentInfo.already_paid&&paymentInfo.status!=='submitted'){
+      const paymentButton=$('customer-payment-submit');
+      if(paymentButton)paymentButton.onclick=()=>submitCustomerPaymentProof(paymentInfo,result,idToken);
+    }
     await loadMyOrders(false);
     if(result.order_id&&checkoutPosition)await startLocationSharing(result.order_id,true,true,checkoutPosition);
     $('receipt').scrollIntoView({behavior:'smooth',block:'center'});
