@@ -544,13 +544,14 @@
     try {
       const result=await callPaymentApi('admin-detail',{transaction_id:id});
       const tx=result.transaction, audit=result.audit||[];
+      const canReview=['submitted','needs_review','rejected'].includes(tx.status);
       const proof=tx.slip_url?'<a class="payment-proof-link" href="'+esc(tx.slip_url)+'" target="_blank" rel="noopener"><img class="payment-proof-image" src="'+esc(tx.slip_url)+'" alt="หลักฐานการโอน"></a>':'<div class="empty-state">ยังไม่มีหลักฐานสลิป</div>';
       const sh=modal('<div class="modal-head"><h3>ตรวจสอบ QR Payment · '+esc(tx.order_number)+'</h3><button class="btn" data-close>ปิด</button></div>'+
         '<div class="payment-detail-grid"><div><div class="payment-detail-label">ยอดที่ต้องชำระ</div><strong>฿'+money(tx.expected_amount)+'</strong></div><div><div class="payment-detail-label">สถานะ</div>'+paymentStatusBadge(tx.status)+'</div><div><div class="payment-detail-label">ยอดเงินจริงที่ตรวจสอบ</div><input id="payment-actual-paid" type="number" min="0" step="0.01" value="'+(tx.paid_amount??tx.expected_amount)+'"></div><div><div class="payment-detail-label">เลขอ้างอิงธุรกรรม (ถ้ามี)</div><input id="payment-transfer-reference" value="'+esc(tx.transfer_reference||'')+'"></div></div>'+
         '<div class="field"><label>บันทึกการตรวจสอบ</label><textarea id="payment-review-note" placeholder="เช่น ตรวจพบเงินเข้าใน Krungsri Simple เวลา...">'+esc(tx.verification_note||'')+'</textarea></div>'+proof+
         '<p class="help">เปิดแอปธนาคารหรือ Statement ตรวจสอบยอดเงินจริง ผู้รับเงิน และรายการอ้างอิงก่อนกดยืนยัน</p>'+
         '<div class="payment-audit"><b>ประวัติรายการ</b>'+(audit.length?audit.map(a=>'<div>'+esc(a.action_key)+' · '+esc(new Date(a.created_at).toLocaleString('th-TH'))+'</div>').join(''):'<div class="muted">ยังไม่มีประวัติ</div>')+'</div>'+
-        '<div class="modal-foot payment-review-actions"><button class="btn danger" id="payment-reject">ไม่พบเงิน / ปฏิเสธ</button><button class="btn" id="payment-needs-review">ตรวจสอบเพิ่ม</button><button class="btn primary" id="payment-match">ยืนยันรับเงิน (Paid)</button></div>');
+        (canReview?'<div class="modal-foot payment-review-actions"><button class="btn danger" id="payment-reject">ไม่พบเงิน / ปฏิเสธ</button><button class="btn" id="payment-needs-review">ตรวจสอบเพิ่ม</button><button class="btn primary" id="payment-match">ยืนยันรับเงิน (Paid)</button></div>':'<div class="alert info">รายการนี้ยังไม่มีหลักฐานให้ตรวจสอบหรือได้รับการยืนยันรับเงินแล้ว</div>'));
       sh.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('.modal-bg').remove());
       const submitReview=async decision=>{
         const actual=Number($('#payment-actual-paid',sh).value), reference=$('#payment-transfer-reference',sh).value.trim(), note=$('#payment-review-note',sh).value.trim();
@@ -563,9 +564,11 @@
           toast(decision==='matched'?'ยืนยันรับเงินเรียบร้อย':'อัปเดตผลการตรวจสอบแล้ว');
         } catch(e) {button.disabled=false;button.textContent=decision==='matched'?'ยืนยันรับเงิน (Paid)':decision==='rejected'?'ไม่พบเงิน / ปฏิเสธ':'ตรวจสอบเพิ่ม';toast(e.message);}
       };
-      $('#payment-match',sh).onclick=()=>submitReview('matched');
-      $('#payment-reject',sh).onclick=()=>submitReview('rejected');
-      $('#payment-needs-review',sh).onclick=()=>submitReview('needs_review');
+      if(canReview){
+        $('#payment-match',sh).onclick=()=>submitReview('matched');
+        $('#payment-reject',sh).onclick=()=>submitReview('rejected');
+        $('#payment-needs-review',sh).onclick=()=>submitReview('needs_review');
+      }
     } catch(e) {toast(e.message||'เปิดรายละเอียด Transaction ไม่สำเร็จ');}
   }
   function bindPaymentEvents() {
