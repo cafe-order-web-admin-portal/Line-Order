@@ -187,9 +187,11 @@ Deno.serve(async (req: Request) => {
         const digest = await crypto.subtle.digest("SHA-256", bytes);
         const hash = Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, "0")).join("");
         const { data: candidates, error: txError } = await admin.from("payment_transactions")
-          .select("id,order_id,order_number,status,slip_sha256,updated_at")
+          .select("id,order_id,order_number,status,slip_sha256,updated_at,orders!inner(order_status,payment_status)")
           .eq("branch_id", branchId).eq("customer_line_user_id", lineUserId)
-          .in("status", ["awaiting_payment", "rejected"]).order("created_at", { ascending: false }).limit(2);
+          .in("status", ["awaiting_payment", "rejected"])
+          .not("orders.order_status", "in", "(cancelled,completed)")
+          .order("created_at", { ascending: false }).limit(2);
         if (txError) throw txError;
         let message = "";
         if (!candidates?.length) {
