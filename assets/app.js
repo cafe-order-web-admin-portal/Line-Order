@@ -24,7 +24,7 @@
     db:null, session:null, user:null, staff:null, branches:[], categories:[],
     products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:(['dashboard','products','categories','options','import','history','customers','payment-overview','payment-transactions','payment-settings'].includes(location.hash.slice(1))?location.hash.slice(1):'dashboard'), selectedOptionProduct:'', customerSearch:'',
     search:'', categoryFilter:'', importRows:[], importFileName:'', importErrors:[],
-    busy:false, paymentRows:[], paymentSettings:null, paymentLoadedBranch:'', paymentSettingsBranch:'', paymentLoadError:'', paymentStatusFilter:'all', paymentSearch:'', paymentLoading:false, paymentExpandedRows:new Set()
+    busy:false, paymentRows:[], paymentSettings:null, paymentLoadedBranch:'', paymentSettingsBranch:'', paymentLoadError:'', paymentStatusFilter:'all', paymentSearch:'', paymentLoading:false, paymentExpandedRows:new Set(), paymentRealtimeChannel:null, paymentRefreshTimer:null
   };
   const isSuper = () => state.staff?.role === 'super_admin';
   const isManager = () => state.staff?.role === 'manager';
@@ -160,7 +160,7 @@
             ${state.staff?.role !== 'staff' ? navButton('import','Import ข้อมูล','⇧') : ''}
             ${state.staff?.role !== 'staff' ? navButton('history','ประวัติ Import','◷') : ''}
             ${state.staff?.role !== 'staff' ? navButton('customers','ข้อมูลลูกค้า','♙') : ''}
-            ${state.staff?.role !== 'staff' ? '<div class="side-label">PAYMENT OPERATIONS</div><div class="payment-nav-tree"><button type="button" class="payment-nav-toggle" id="payment-nav-toggle" aria-expanded="true"><span class="ico">▣</span><span>QR Payment Transactions</span><span class="payment-nav-caret">⌄</span></button><div class="payment-nav-sub"><button data-page="payment-overview">Dashboard Overview</button><button data-page="payment-transactions">Transactions</button><button data-page="payment-settings">Payment Settings</button></div></div>' : ''}
+            ${state.staff?.role !== 'staff' ? '<div class="side-label">PAYMENT OPERATIONS</div><div class="payment-nav-tree"><button type="button" class="payment-nav-toggle" id="payment-nav-toggle" aria-expanded="false"><span class="ico">▣</span><span>QR Payment Transactions</span><span class="payment-nav-caret">⌄</span></button><div class="payment-nav-sub" id="payment-nav-sub" hidden><button data-page="payment-overview">Dashboard Overview</button><button data-page="payment-transactions">Transactions</button><button data-page="payment-settings">Payment Settings</button></div></div>' : ''}
           </nav>
           <div class="side-foot">☕ &nbsp; ${esc(activeBranch()?.branch_name||'Café Amazon')}<br><span class="side-foot-meta">Store Management · Supabase</span></div>
         </aside>
@@ -190,13 +190,20 @@
       history.replaceState(null,'',location.pathname+location.search+'#'+state.page);
       renderApp();
     });
+    const paymentToggle=$('#payment-nav-toggle'),paymentSub=$('#payment-nav-sub');
+    if(paymentToggle&&paymentSub) paymentToggle.onclick=()=>{
+      const open=paymentSub.hidden;
+      paymentSub.hidden=!open;
+      paymentToggle.setAttribute('aria-expanded',String(open));
+      paymentToggle.querySelector('.payment-nav-caret').textContent=open?'⌃':'⌄';
+    };
     const moreToggle=$('#mobile-more-toggle'), moreMenu=$('#mobile-more-menu');
     if(moreToggle&&moreMenu) moreToggle.onclick=()=>{
       const open=moreMenu.hidden;
       moreMenu.hidden=!open;
       moreToggle.setAttribute('aria-expanded',String(open));
     };
-    if($('#branch-select')) $('#branch-select').onchange=e=>{state.branchId=e.target.value;renderApp();};
+    if($('#branch-select')) $('#branch-select').onchange=e=>{state.branchId=e.target.value;renderApp();startPaymentLiveUpdates();};
     $('#logout-btn').onclick=logout;
     $('#refresh-btn').onclick=async()=>{try{await reloadData();renderApp();toast('โหลดข้อมูลล่าสุดแล้ว')}catch(e){toast(e.message)}};
     bindPageEvents();
@@ -499,13 +506,27 @@
   async function ensurePaymentPageData(force=false) {
     if(!paymentPageKeys.includes(state.page)||state.staff?.role==='staff'||!state.db) return;
     if(!force&&state.paymentLoadedBranch===state.branchId&&state.paymentSettingsBranch===state.branchId) return;
-    state.paymentLoadError='';
+    if(state.paymentLoading)return;
+    state.paymentLoading=true;state.paymentLoadError='';
     try {
       const jobs=[loadPaymentSettings()];
       if(state.page!=='payment-settings') jobs.push(loadPaymentRows('all'));
       await Promise.all(jobs);
     } catch(e) { state.paymentLoadError=e.message||'โหลดข้อมูลการชำระเงินไม่สำเร็จ'; }
+    finally {state.paymentLoading=false;}
     if(paymentPageKeys.includes(state.page)) renderApp();
+  }
+  function startPaymentLiveUpdates() {
+    if(!state.db||state.staff?.role==='staff')return;
+    if(state.paymentRealtimeChannel)state.db.removeChannel(state.paymentRealtimeChannel);
+    state.paymentRealtimeChannel=state.db.channel('admin-payment-live-'+state.branchId)
+      .on('postgres_changes',{event:'*',schema:'public',table:'payment_transactions',filter:'branch_id=eq.'+state.branchId},()=>{
+        if(paymentPageKeys.includes(state.page))ensurePaymentPageData(true);
+      }).subscribe();
+    if(state.paymentRefreshTimer)clearInterval(state.paymentRefreshTimer);
+    state.paymentRefreshTimer=setInterval(()=>{
+      if(!document.hidden&&paymentPageKeys.includes(state.page))ensurePaymentPageData(true);
+    },5000);
   }
   function paymentPageHead(title,desc) {
     return '<div class="page-head"><div><h2>'+title+'</h2><p>'+desc+'</p></div><div class="actions"><button class="btn" id="payment-refresh">↻ รีเฟรชข้อมูล</button></div></div>';
@@ -927,7 +948,7 @@
     const {data:{session}}=await state.db.auth.getSession();
     if(!session){renderLogin();return;}
     state.session=session;state.user=session.user;
-    try{await loadStaffAndData();renderApp();}
+    try{await loadStaffAndData();renderApp();startPaymentLiveUpdates();}
     catch(e){await state.db.auth.signOut();renderLogin(e.message);}
     state.db.auth.onAuthStateChange(async(event,session)=>{
       if(event==='SIGNED_OUT'||!session){state.session=null;state.user=null;state.staff=null;renderLogin();}
