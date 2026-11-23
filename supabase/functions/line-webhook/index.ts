@@ -31,6 +31,22 @@ async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>
     return { status: "submitted", message: "รับสลิปแล้ว ระบบรอตั้งค่าการตรวจสอบอัตโนมัติ", auto_verified: false };
   }
 
+  if (bytes.length > 4 * 1024 * 1024) {
+    const note = "EasySlip รองรับภาพสลิปไม่เกิน 4 MB";
+    const now = new Date().toISOString();
+    await admin.from("payment_transactions").update({
+      status: "rejected", verification_note: note, paid_amount: null,
+      verified_by: null, verified_at: now, updated_at: now,
+    }).eq("id", tx.id).eq("status", "submitted");
+    await admin.from("payment_audit_logs").insert({
+      transaction_id: tx.id, order_id: tx.order_id, branch_id: branchId,
+      actor_ref: "system:easyslip", action_key: "payment_auto_rejected",
+      before_state: { status: "submitted" }, after_state: { status: "rejected", note },
+    });
+    await admin.from("orders").update({ payment_status: "unpaid" }).eq("id", tx.order_id);
+    return { status: "rejected", message: "ไฟล์สลิปมีขนาดเกิน 4 MB กรุณาลดขนาดภาพแล้วส่งใหม่", auto_verified: false };
+  }
+
   const { data: credential, error: credentialErr } = await admin.from("payment_provider_credentials")
     .select("api_key").eq("branch_id", branchId).eq("provider", "easyslip").maybeSingle();
   if (credentialErr) throw credentialErr;
