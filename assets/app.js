@@ -569,7 +569,8 @@
         const button=decision==='matched'?$('#payment-match',sh):decision==='rejected'?$('#payment-reject',sh):$('#payment-needs-review',sh);
         button.disabled=true;button.textContent='กำลังบันทึก…';
         try {
-          if(decision==='matched'&&!confirm('ยืนยันว่าได้ตรวจสอบรายการเงินจริงในบัญชีธนาคารแล้ว และยอดตรงกับ Order ใช่หรือไม่?'))return;\n          await callPaymentApi('admin-review',{transaction_id:id,decision,paid_amount:actual,transfer_reference:reference,note});
+          if(decision==='matched'&&!confirm('ยืนยันว่าได้ตรวจสอบรายการเงินจริงในบัญชีธนาคารแล้ว และยอดตรงกับ Order ใช่หรือไม่?')){button.disabled=false;button.textContent='ยืนยันรับเงิน (Paid)';return;}
+          await callPaymentApi('admin-review',{transaction_id:id,decision,paid_amount:actual,transfer_reference:reference,note});
           $('.modal-bg')?.remove();state.paymentLoadedBranch='';await loadPaymentRows('all');renderApp();
           toast(decision==='matched'?'ยืนยันรับเงินเรียบร้อย':'อัปเดตผลการตรวจสอบแล้ว');
         } catch(e) {button.disabled=false;button.textContent=decision==='matched'?'ยืนยันรับเงิน (Paid)':decision==='rejected'?'ไม่พบเงิน / ปฏิเสธ':'ตรวจสอบเพิ่ม';toast(e.message);}
