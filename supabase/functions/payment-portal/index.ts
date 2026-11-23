@@ -121,6 +121,146 @@ async function signedSlip(path: string | null) {
   return data.signedUrl;
 }
 
+
+async function runAutoSlipVerification(tx: Record<string, any>, bytes: Uint8Array, mime: string) {
+  const branchId = String(tx.branch_id ?? "");
+  const { data: settings, error: settingsErr } = await admin.from("payment_settings")
+    .select("slip_auto_verify_enabled").eq("branch_id", branchId).maybeSingle();
+  if (settingsErr) throw settingsErr;
+  if (settings?.slip_auto_verify_enabled !== true) {
+    return { status: "submitted", message: "รับสลิปแล้ว ระบบรอตั้งค่าการตรวจสอบอัตโนมัติ", auto_verified: false };
+  }
+
+  const { data: credential, error: credentialErr } = await admin.from("payment_provider_credentials")
+    .select("api_key").eq("branch_id", branchId).eq("provider", "easyslip").maybeSingle();
+  if (credentialErr) throw credentialErr;
+  const apiKey = String(credential?.api_key ?? "").trim();
+  if (!apiKey) {
+    return { status: "needs_review", message: "ระบบตรวจสอบสลิปยังไม่มี API Key กรุณาส่งสลิปอีกครั้งหลังตั้งค่าระบบ", auto_verified: false };
+  }
+
+  let response: Response;
+  let payload: Record<string, any> = {};
+  try {
+    const form = new FormData();
+    const ext = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
+    form.append("image", new Blob([bytes], { type: mime }), "payment-slip." + ext);
+    form.append("remark", String(tx.order_number ?? "").slice(0, 255));
+    form.append("matchAccount", "true");
+    form.append("matchAmount", String(Math.round(Number(tx.expected_amount) * 100) / 100));
+    form.append("checkDuplicate", "true");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+    try {
+      response = await fetch("https://api.easyslip.com/v2/verify/bank", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + apiKey },
+        body: form,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    payload = await response.json().catch(() => ({}));
+  } catch (error) {
+    const note = error instanceof Error && error.name === "AbortError"
+      ? "EasySlip verification timed out"
+      : "EasySlip connection failed";
+    await admin.from("payment_transactions").update({
+      status: "needs_review", verification_note: note, verified_by: null,
+      verified_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }).eq("id", tx.id).eq("status", "submitted");
+    await admin.from("payment_audit_logs").insert({
+      transaction_id: tx.id, order_id: tx.order_id, branch_id: branchId,
+      actor_ref: "system:easyslip", action_key: "payment_auto_verification_error",
+      before_state: { status: "submitted" }, after_state: { status: "needs_review", note },
+    });
+    return { status: "needs_review", message: "ระบบตรวจสอบขัดข้องชั่วคราว กรุณาส่งสลิปอีกครั้ง", auto_verified: false };
+  }
+
+  const data = payload?.data ?? {};
+  const rawSlip = data?.rawSlip ?? {};
+  const verifiedAmount = Number(data?.amountInSlip ?? rawSlip?.amount?.amount);
+  const expectedAmount = Math.round(Number(tx.expected_amount) * 100) / 100;
+  const transferRef = String(rawSlip?.transRef ?? "").trim();
+  const receiverMatch = data?.matchedAccount;
+  const transferDate = rawSlip?.date ? new Date(rawSlip.date) : null;
+  const currency = String(rawSlip?.amount?.local?.currency ?? "THB").toUpperCase();
+  const countryCode = String(rawSlip?.countryCode ?? "").toUpperCase();
+
+  let rejectionReason = "";
+  let transientReason = "";
+  if (!response.ok || payload?.success !== true) {
+    const code = String(payload?.error?.code ?? "");
+    const terminalCodes = ["SLIP_NOT_FOUND", "DUPLICATE_SLIP", "AMOUNT_MISMATCH", "ACCOUNT_NOT_MATCHED", "INVALID_SLIP", "INVALID_QR"];
+    if (terminalCodes.includes(code) || [400, 404, 422].includes(response.status)) rejectionReason = String(payload?.error?.message ?? "สลิปไม่ถูกต้อง");
+    else transientReason = String(payload?.error?.message ?? ("EasySlip HTTP " + response.status));
+  } else if (data?.isDuplicate === true) {
+    rejectionReason = "สลิปนี้ถูกใช้ตรวจสอบแล้ว";
+  } else if (!Number.isFinite(verifiedAmount) || Math.abs(verifiedAmount - expectedAmount) > 0.004) {
+    rejectionReason = "ยอดเงินในสลิปไม่ตรงกับยอดคำสั่งซื้อ";
+  } else if (data?.isAmountMatched === false) {
+    rejectionReason = "ยอดเงินไม่ผ่านการจับคู่";
+  } else if (!receiverMatch || !String(receiverMatch?.bankNumber ?? "").trim()) {
+    rejectionReason = "บัญชีผู้รับไม่ตรงกับบัญชีที่ลงทะเบียนไว้ใน EasySlip";
+  } else if (!transferRef) {
+    rejectionReason = "ไม่พบเลขอ้างอิงธุรกรรมจากสลิป";
+  } else if (countryCode !== "TH" || currency !== "THB") {
+    rejectionReason = "รองรับเฉพาะสลิปโอนเงินบาทภายในประเทศไทย";
+  } else if (!transferDate || !Number.isFinite(transferDate.getTime())) {
+    rejectionReason = "ไม่พบวันเวลาโอนที่ตรวจสอบได้";
+  }
+
+  if (!rejectionReason && !transientReason) {
+    const { data: duplicateRef, error: duplicateErr } = await admin.from("payment_transactions")
+      .select("id,order_number").eq("transfer_reference", transferRef).neq("id", tx.id).limit(1).maybeSingle();
+    if (duplicateErr) throw duplicateErr;
+    if (duplicateRef) rejectionReason = "เลขอ้างอิงธุรกรรมนี้ถูกใช้กับ Order " + duplicateRef.order_number + " แล้ว";
+  }
+
+  const now = new Date().toISOString();
+  const passed = !rejectionReason && !transientReason;
+  const nextStatus = passed ? "matched" : rejectionReason ? "rejected" : "needs_review";
+  const note = passed
+    ? "ตรวจสอบอัตโนมัติผ่าน EasySlip: ยอด " + verifiedAmount.toFixed(2) + " บาท / Receiver matched / Duplicate check passed"
+    : rejectionReason || ("ระบบตรวจสอบอัตโนมัติไม่สำเร็จ: " + transientReason);
+  const updates: Record<string, any> = {
+    status: nextStatus, verification_note: note, verified_by: null, verified_at: now, updated_at: now,
+    paid_amount: passed ? verifiedAmount : null,
+    transfer_reference: passed ? transferRef : null,
+    transfer_at: passed ? transferDate!.toISOString() : null,
+  };
+  const { data: updated, error: updateErr } = await admin.from("payment_transactions")
+    .update(updates).eq("id", tx.id).eq("status", "submitted").select("id").maybeSingle();
+  if (updateErr) throw updateErr;
+  if (!updated) {
+    const { data: current } = await admin.from("payment_transactions").select("status").eq("id", tx.id).maybeSingle();
+    return { status: current?.status ?? "needs_review", message: "ระบบรับสลิปนี้ไว้แล้ว", auto_verified: current?.status === "matched" };
+  }
+  const { error: orderErr } = await admin.from("orders")
+    .update({ payment_status: passed ? "paid" : rejectionReason ? "unpaid" : "pending_verification" })
+    .eq("id", tx.order_id);
+  if (orderErr) throw orderErr;
+  const { error: auditErr } = await admin.from("payment_audit_logs").insert({
+    transaction_id: tx.id, order_id: tx.order_id, branch_id: branchId,
+    actor_ref: "system:easyslip",
+    action_key: passed ? "payment_auto_verified" : rejectionReason ? "payment_auto_rejected" : "payment_auto_verification_error",
+    before_state: { status: "submitted" },
+    after_state: {
+      status: nextStatus, provider: "easyslip", amount: passed ? verifiedAmount : null,
+      transfer_reference: passed ? transferRef : null,
+      receiver_bank: passed ? String(receiverMatch?.bank?.shortCode ?? receiverMatch?.bank?.code ?? "") : null,
+      receiver_account_masked: passed ? String(receiverMatch?.bankNumber ?? "") : null,
+      note,
+    },
+  });
+  if (auditErr) throw auditErr;
+
+  if (passed) return { status: "matched", message: "ตรวจสอบสลิปสำเร็จ ระบบยืนยันการชำระเงินแล้ว", auto_verified: true };
+  if (rejectionReason) return { status: "rejected", message: "สลิปไม่ผ่านการตรวจสอบ: " + rejectionReason + " กรุณาตรวจสอบและส่งสลิปที่ถูกต้อง", auto_verified: false };
+  return { status: "needs_review", message: "ระบบตรวจสอบไม่สำเร็จชั่วคราว กรุณาส่งสลิปอีกครั้ง", auto_verified: false };
+}
+
 async function handle(body: Obj, req: Request): Promise<Obj> {
   const action = str(body.action, 80);
 
@@ -223,8 +363,6 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     const transactionId = str(body.transaction_id, 80);
     const mime = str(body.mime_type, 80).toLowerCase();
     const base64 = str(body.file_base64, 7_000_000);
-    const reference = str(body.transfer_reference, 140);
-    const transferAt = str(body.transfer_at, 80);
     const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
     if (!allowed.has(mime) || !base64) throw new Error("กรุณาแนบสลิปเป็น JPG, PNG หรือ WebP");
     const { data: tx, error: txErr } = await admin.from("payment_transactions")
@@ -236,7 +374,7 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     const digest = await crypto.subtle.digest("SHA-256", bytes);
     const slipHash = Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, "0")).join("");
     const { data: duplicateSlip, error: duplicateSlipErr } = await admin.from("payment_transactions")
-      .select("id,order_number").eq("slip_sha256", slipHash).neq("id", tx.id).maybeSingle();
+      .select("id,order_number").eq("slip_sha256", slipHash).neq("id", tx.id).limit(1).maybeSingle();
     if (duplicateSlipErr) throw duplicateSlipErr;
     if (duplicateSlip) throw new Error("ภาพสลิปนี้ถูกส่งใช้กับ Order " + duplicateSlip.order_number + " แล้ว");
     const ext = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
@@ -246,21 +384,23 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     });
     if (uploadErr) throw uploadErr;
     const before = { status: tx.status, slip_path: tx.slip_path };
+    const submittedAt = new Date().toISOString();
     const { error: updateErr } = await admin.from("payment_transactions").update({
-      status: "submitted", slip_path: path, slip_sha256: slipHash, transfer_reference: reference || null,
-      transfer_at: transferAt ? new Date(transferAt).toISOString() : null,
-      submitted_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      status: "submitted", slip_path: path, slip_sha256: slipHash, transfer_reference: null,
+      transfer_at: null, submitted_at: submittedAt, updated_at: submittedAt,
       verification_note: null, paid_amount: null, verified_by: null, verified_at: null,
     }).eq("id", tx.id);
     if (updateErr) throw updateErr;
     const { error: orderUpdateErr } = await admin.from("orders").update({ payment_status: "pending_verification" }).eq("id", order.id);
     if (orderUpdateErr) throw orderUpdateErr;
-    await admin.from("payment_audit_logs").insert({
+    const { error: auditErr } = await admin.from("payment_audit_logs").insert({
       transaction_id: tx.id, order_id: order.id, branch_id: order.branch_id,
       actor_ref: "customer:" + claims.sub, action_key: "proof_submitted",
-      before_state: before, after_state: { status: "submitted", transfer_reference: reference || null },
+      before_state: before, after_state: { status: "submitted", slip_sha256: slipHash },
     });
-    return { success: true, status: "submitted", message: "รับสลิปแล้ว ร้านจะตรวจสอบยอดเงินก่อนยืนยันการชำระเงิน" };
+    if (auditErr) throw auditErr;
+    const result = await runAutoSlipVerification({ ...tx, branch_id: order.branch_id, order_id: order.id, slip_path: path, expected_amount: tx.expected_amount }, bytes, mime);
+    return { success: true, status: result.status, auto_verified: result.auto_verified === true, message: result.message };
   }
 
   const branchIdInput = str(body.branch_id, 80);
@@ -302,11 +442,84 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
   if (action === "admin-get-settings") {
     const { data, error } = await admin.from("payment_settings").select("*").eq("branch_id", ctx.branchId).maybeSingle();
     if (error) throw error;
-    return { success: true, settings: data || {
-      branch_id: ctx.branchId, qr_payment_enabled: false, qr_image_url: QR_IMAGE_URL,
-      customer_message: "กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ",
-      offline_message: "ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า",
-      payment_timeout_minutes: 20, require_slip: true,
+    const { data: credential, error: credentialErr } = await admin.from("payment_provider_credentials")
+      .select("provider,updated_at").eq("branch_id", ctx.branchId).maybeSingle();
+    if (credentialErr) throw credentialErr;
+    return { success: true, settings: {
+      ...(data || {
+        branch_id: ctx.branchId, qr_payment_enabled: false, qr_image_url: QR_IMAGE_URL,
+        customer_message: "กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ",
+        offline_message: "ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า",
+        payment_timeout_minutes: 20, require_slip: true,
+      }),
+      slip_auto_verify_enabled: data?.slip_auto_verify_enabled === true,
+      slip_verifier_configured: !!credential,
+      slip_verifier_provider: credential?.provider || null,
+      slip_verifier_updated_at: credential?.updated_at || null,
+    } };
+  }
+
+  if (action === "admin-save-slip-verifier") {
+    const apiKeyInput = str(body.api_key, 500);
+    const enabled = body.enabled === true;
+    const { data: currentCredential, error: currentCredentialErr } = await admin.from("payment_provider_credentials")
+      .select("api_key").eq("branch_id", ctx.branchId).eq("provider", "easyslip").maybeSingle();
+    if (currentCredentialErr) throw currentCredentialErr;
+    const apiKey = apiKeyInput || String(currentCredential?.api_key || "");
+    if (enabled && !apiKey) throw new Error("กรุณาใส่ EasySlip API Key ก่อนเปิดตรวจสอบอัตโนมัติ");
+    let providerInfo = null;
+    if (apiKey) {
+      const infoResponse = await fetch("https://api.easyslip.com/v2/info", {
+        headers: { Authorization: "Bearer " + apiKey },
+      });
+      const info = await infoResponse.json().catch(() => ({}));
+      if (!infoResponse.ok || info.success !== true || info.data?.branch?.isActive !== true) {
+        throw new Error("ตรวจสอบ EasySlip API Key ไม่ผ่าน: " + String(info.error?.message || "API Key ไม่ถูกต้องหรือ Branch ไม่ Active"));
+      }
+      providerInfo = {
+        application_name: info.data?.application?.name || null,
+        branch_name: info.data?.branch?.name || null,
+        quota_remaining: info.data?.application?.quota?.remaining ?? null,
+        product_name: info.data?.product?.name || null,
+        expires_at: info.data?.application?.autoRenew?.expiresAt || null,
+      };
+      if (apiKeyInput) {
+        const { error: saveCredentialErr } = await admin.from("payment_provider_credentials").upsert({
+          branch_id: ctx.branchId, provider: "easyslip", api_key: apiKey,
+          updated_by: ctx.user.id, updated_at: new Date().toISOString(),
+        }, { onConflict: "branch_id" });
+        if (saveCredentialErr) throw saveCredentialErr;
+      }
+    }
+    const { data: before } = await admin.from("payment_settings").select("*").eq("branch_id", ctx.branchId).maybeSingle();
+    const payload = {
+      branch_id: ctx.branchId,
+      qr_payment_enabled: before?.qr_payment_enabled === true,
+      qr_image_url: before?.qr_image_url || QR_IMAGE_URL,
+      customer_message: before?.customer_message || "กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ",
+      offline_message: before?.offline_message || "ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า",
+      payment_timeout_minutes: before?.payment_timeout_minutes || 20,
+      require_slip: before?.require_slip !== false,
+      slip_auto_verify_enabled: enabled,
+      updated_by: ctx.user.id, updated_at: new Date().toISOString(),
+    };
+    const { data: saved, error: saveErr } = await admin.from("payment_settings")
+      .upsert(payload, { onConflict: "branch_id" }).select("*").single();
+    if (saveErr) throw saveErr;
+    await admin.from("payment_audit_logs").insert({
+      transaction_id: null, order_id: null, branch_id: ctx.branchId,
+      actor_ref: ctx.user.id, action_key: "payment_auto_verification_settings_updated",
+      before_state: { enabled: before?.slip_auto_verify_enabled === true },
+      after_state: { enabled, provider: "easyslip", provider_info: providerInfo, api_key_updated: !!apiKeyInput },
+    });
+    const { data: credentialInfo } = await admin.from("payment_provider_credentials")
+      .select("provider,updated_at").eq("branch_id", ctx.branchId).maybeSingle();
+    return { success: true, settings: {
+      ...saved, slip_auto_verify_enabled: enabled,
+      slip_verifier_configured: !!credentialInfo,
+      slip_verifier_provider: credentialInfo?.provider || null,
+      slip_verifier_updated_at: credentialInfo?.updated_at || null,
+      slip_verifier_info: providerInfo,
     } };
   }
 
@@ -386,6 +599,7 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     const id = str(body.transaction_id, 80);
     const decision = str(body.decision, 30);
     const note = str(body.note, 1000);
+    if (decision === "matched") throw new Error("การยืนยัน Paid ต้องผ่านระบบตรวจสอบสลิปอัตโนมัติเท่านั้น");
     const actualPaid = amount(body.paid_amount);
     const transferRef = str(body.transfer_reference, 140);
     if (!["matched", "rejected", "needs_review"].includes(decision)) throw new Error("สถานะตรวจสอบไม่ถูกต้อง");
