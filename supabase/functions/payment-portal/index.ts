@@ -336,7 +336,7 @@ async function runAutoSlipVerification(tx: Record<string, any>, bytes: Uint8Arra
   const nextStatus = passed ? "matched" : rejectionReason ? "rejected" : "needs_review";
   const note = passed
     ? "ตรวจสอบอัตโนมัติผ่าน EasySlip: ยอด " + verifiedAmount.toFixed(2) + " บาท / Receiver matched / Duplicate check passed"
-    : rejectionReason || reviewReason || ("ระบบตรวจสอบอัตโนมัติไม่สำเร็จ: " + transientReason);
+    : rejectionReason || reviewReason || ("[AUTO_RETRY] ระบบตรวจสอบอัตโนมัติยังไม่จบ รอตรวจซ้ำ: " + transientReason);
   const updates: Record<string, any> = {
     status: nextStatus, verification_note: note, verified_by: null, verified_at: now, updated_at: now,
     paid_amount: passed ? verifiedAmount : null,
@@ -820,8 +820,9 @@ Deno.serve(async (req: Request) => {
       const { data: authorized, error: cronErr } = await admin.rpc("verify_backoffice_cron_key", { p_key: String(body.k || "") });
       if (cronErr || authorized !== true) return reply(null, 403, { success: false, error: "cron_unauthorized" });
       const { data: candidates, error: listErr } = await admin.from("payment_transactions")
-        .select("*").eq("status", "needs_review")
-        .or("verification_note.ilike.%SLIP_PENDING%,verification_note.ilike.%TRANSACTION_PENDING%,verification_note.ilike.%BANK_PENDING%,verification_note.ilike.%SLIP_NOT_FOUND%,verification_note.ilike.%EasySlip connection%,verification_note.ilike.%timed out%")
+        .select("*,orders!inner(order_status)").eq("status", "needs_review")
+        .not("orders.order_status", "in", "(cancelled,completed)")
+        .or("verification_note.ilike.%AUTO_RETRY%,verification_note.ilike.%SLIP_PENDING%,verification_note.ilike.%TRANSACTION_PENDING%,verification_note.ilike.%BANK_PENDING%,verification_note.ilike.%SLIP_NOT_FOUND%,verification_note.ilike.%EasySlip connection%,verification_note.ilike.%timed out%")
         .lt("updated_at", new Date(Date.now() - 45000).toISOString())
         .order("updated_at", { ascending: true }).limit(20);
       if (listErr) throw listErr;
@@ -838,6 +839,26 @@ Deno.serve(async (req: Request) => {
           .eq("id", candidate.id).eq("status", "needs_review").select("*").maybeSingle();
         if (claimErr) throw claimErr;
         if (!claimed) continue;
+        // ออเดอร์อาจถูกยกเลิกระหว่างที่ธนาคารยังไม่เผยแพร่รายการ
+        // ห้ามบันทึกว่าได้รับเงินและห้ามส่ง LINE บอกลูกค้าให้กับออเดอร์ที่ยกเลิกไปแล้ว
+        const { data: orderRow } = await admin.from("orders")
+          .select("order_status").eq("id", claimed.order_id).maybeSingle();
+        const orderStatus = String(orderRow?.order_status ?? "");
+        if (["cancelled", "completed"].includes(orderStatus)) {
+          const stopNote = "ออเดอร์" + (orderStatus === "cancelled" ? "ถูกยกเลิก" : "ปิดงานแล้ว")
+            + "ก่อนระบบตรวจสลิปเสร็จ · ระบบหยุดตรวจและไม่บันทึกรับเงิน";
+          await admin.from("payment_transactions").update({
+            status: "expired", verification_note: stopNote, paid_amount: null,
+            updated_at: new Date().toISOString(),
+          }).eq("id", claimed.id).eq("status", "submitted");
+          await admin.from("payment_audit_logs").insert({
+            transaction_id: claimed.id, order_id: claimed.order_id, branch_id: claimed.branch_id,
+            actor_ref: "system:easyslip-retry", action_key: "payment_expired_order_cancelled",
+            before_state: { status: "needs_review" },
+            after_state: { status: "expired", order_status: orderStatus, note: stopNote },
+          });
+          continue;
+        }
         checked++;
         try {
           if (!claimed.slip_path) throw new Error("missing_slip_path");
@@ -851,7 +872,7 @@ Deno.serve(async (req: Request) => {
           else if (result.status === "needs_review") stillPending++;
         } catch (e) {
           errors++;
-          const note = "Background retry error: " + String((e as Error).message || e).slice(0, 250);
+          const note = "[AUTO_RETRY] Background retry error: " + String((e as Error).message || e).slice(0, 250);
           await admin.from("payment_transactions").update({ status: "needs_review", verification_note: note, updated_at: new Date().toISOString() })
             .eq("id", claimed.id).eq("status", "submitted");
           await admin.from("payment_audit_logs").insert({

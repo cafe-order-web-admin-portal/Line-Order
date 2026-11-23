@@ -4,8 +4,8 @@ Updated: 2026-11-23 (รอบ 2 · Claude)
 
 ## Current deployment
 - Supabase project: `ytxbnqosenolojifeikf`
-- `payment-portal`: **v19** ACTIVE
-- `line-webhook`: **v38** ACTIVE
+- `payment-portal`: **v21** ACTIVE
+- `line-webhook`: **v39** ACTIVE
 - `update-order-status`: v21 ACTIVE
 
 > **สำคัญ — ซอร์สใน `supabase/functions/` เคยล้าหลังของจริงมาก** (payment-portal 689 บรรทัด ขณะที่ v18 มี 886, line-webhook 445 ขณะที่ v37 มี 488)
@@ -36,6 +36,23 @@ Updated: 2026-11-23 (รอบ 2 · Claude)
 - LIFF button progress copy changed from `กำลังส่งคำสั่งซื้อ…` to `ระบบกำลังพาไปหน้าชำระเงิน…` in PR #28. This UI change is pending merge/deployment.
 - **Source-sync warning:** the live `create-order` v26 source was retrieved and used as the exact deployment baseline for v27. The corresponding source file was not found at the expected `supabase/functions/create-order/index.ts` path in the repository. Before any future deploy, first add/sync the live v27 source into the canonical repository path and compare it against production; do not deploy an older local copy.
 - Static post-deploy checks: customer pending push absent; staff notification remains; `create_liff_order` call remains; function status ACTIVE v27. No test order/payment was created.
+
+## รอบ 3 (19:00) — ตัวตรวจซ้ำตรวจได้ครั้งเดียวแล้วค้าง + การ์ดกันออเดอร์ที่ยกเลิก
+**บั๊กที่เกิดจริง 23 พ.ย. 69 18:44–18:52** (order `B0001-261123114336-D9CA13`) — อ่านก่อนแก้ตัวตรวจซ้ำ
+
+1. **ตรวจซ้ำได้ครั้งเดียวแล้วค้างยาว** (`payment-portal` v20)
+   - ตัวตรวจซ้ำเลือกงานด้วย `verification_note.ilike.%SLIP_PENDING%` ฯลฯ
+   - แต่พอ **มันเองตรวจแล้วธนาคารยังไม่เผยแพร่** มันเขียนโน้ตใหม่ทับในรูปแบบของตัวเอง ซึ่ง**ไม่มีคำเหล่านั้น**
+     → แถวหลุดจากคิวงานของตัวเอง ตรวจได้ครั้งเดียวแล้วค้างจนหมดเวลา
+   - รอบทดสอบก่อนหน้าไม่เจอเพราะธนาคารเผยแพร่ทันในรอบแรกพอดี
+   - **แก้:** ใส่เครื่องหมาย `[AUTO_RETRY]` ในโน้ตทุกครั้งที่ยังต้องตรวจซ้ำ (ทั้งกรณีรอธนาคารและกรณีตัวตรวจซ้ำพังเอง) และเพิ่ม `verification_note.ilike.%AUTO_RETRY%` ในคิวรีเลือกงาน
+   - **กติกาสำหรับคนแก้ต่อ: ถ้าเปลี่ยนข้อความโน้ตตอนยังตรวจไม่จบ ต้องคงคำว่า `AUTO_RETRY` ไว้เสมอ ไม่งั้นรายการจะค้างเงียบ**
+2. **การ์ดกันบันทึกรับเงินให้ออเดอร์ที่ยกเลิกแล้ว** (`payment-portal` v21)
+   - เคสจริง: Pae ยกเลิกออเดอร์ 18:50:11 แต่ตัวตรวจซ้ำยังตรวจต่อ แล้วบันทึก `paid` ตอน 18:52:04 พร้อม push LINE บอกลูกค้าว่าได้รับเงินแล้ว ทั้งที่ออเดอร์ยกเลิกไปแล้ว
+   - **แก้ 2 ชั้น:** คัด `orders.order_status in (cancelled,completed)` ออกตั้งแต่เลือกงาน · และเช็คสถานะออเดอร์ซ้ำอีกครั้งหลังจับจองงาน (ออเดอร์อาจถูกยกเลิกระหว่างทาง) ถ้ายกเลิกแล้ว → ตั้งรายการเป็น `expired` บันทึก audit `payment_expired_order_cancelled` แล้วข้าม ไม่ตรวจ ไม่บันทึกรับเงิน ไม่ส่ง LINE
+3. **ข้อความตอนรับสลิป** (`line-webhook` v39): "ได้รับข้อมูลสลิปชำระเงินเรียบร้อยแล้ว ตรวจสอบประมาณ 1-2 นาที และจะยืนยัน Order ผ่าน LINE อีกครั้ง (Order …)"
+
+**รายการที่ต้องให้เจ้าของตัดสิน:** `B0001-261123114336-D9CA13` ค้างสถานะ order = cancelled แต่ payment = paid 1.00 บาท (เงินเข้าจริง) — ยังไม่แก้ข้อมูล รอเจ้าของสั่งว่าจะคืนเงินหรือถือเป็นรายการทดสอบ
 
 ## รอบ 2 — แก้ UI ตามที่เจ้าของแจ้ง
 1. **ข้อความตอนรับสลิป** เปลี่ยนเป็น "ได้รับข้อมูลสลิปชำระเงินเรียบร้อยแล้ว ตรวจสอบข้อมูลสักครู่" (ต่อท้ายด้วย `(Order …)` เหมือนเดิม) — `line-webhook` v38

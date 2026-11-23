@@ -230,7 +230,7 @@ async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>
     return { status: "needs_review", message: "ระบบได้รับสลิปแล้ว และยอดเงินตรงกับคำสั่งซื้อ · รอร้านยืนยันอีกครั้งครับ ไม่ต้องส่งสลิปใหม่", auto_verified: false };
   }
   // ธนาคารยังเผยแพร่รายการไม่ครบ — สลิปอยู่ในระบบแล้ว ระบบจะตรวจซ้ำให้เองทุกนาที
-  return { status: "needs_review", message: "ได้รับข้อมูลสลิปชำระเงินเรียบร้อยแล้ว ตรวจสอบข้อมูลสักครู่", auto_verified: false };
+  return { status: "needs_review", message: "ได้รับข้อมูลสลิปชำระเงินเรียบร้อยแล้ว ตรวจสอบประมาณ 1-2 นาที และจะยืนยัน Order ผ่าน LINE อีกครั้ง", auto_verified: false };
 }
 
 async function recordChat(
