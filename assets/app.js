@@ -24,7 +24,7 @@
     db:null, session:null, user:null, staff:null, branches:[], categories:[],
     products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:(['dashboard','products','categories','options','import','history','customers','payment-overview','payment-transactions','payment-settings'].includes(location.hash.slice(1))?location.hash.slice(1):'dashboard'), selectedOptionProduct:'', customerSearch:'',
     search:'', categoryFilter:'', importRows:[], importFileName:'', importErrors:[],
-    busy:false, paymentRows:[], paymentSettings:null, paymentLoadedBranch:'', paymentSettingsBranch:'', paymentLoadError:'', paymentStatusFilter:'all', paymentSearch:'', paymentLoading:false, paymentExpandedRows:new Set(), paymentRealtimeChannel:null, paymentRefreshTimer:null
+    busy:false, paymentRows:[], paymentSettings:null, paymentLoadedBranch:'', paymentSettingsBranch:'', paymentLoadError:'', paymentStatusFilter:'all', paymentSearch:'', paymentLoading:false, paymentExpandedRows:new Set(), paymentRealtimeChannel:null, paymentRefreshTimer:null, paymentNavExpanded:false
   };
   const isSuper = () => state.staff?.role === 'super_admin';
   const isManager = () => state.staff?.role === 'manager';
@@ -160,7 +160,7 @@
             ${state.staff?.role !== 'staff' ? navButton('import','Import ข้อมูล','⇧') : ''}
             ${state.staff?.role !== 'staff' ? navButton('history','ประวัติ Import','◷') : ''}
             ${state.staff?.role !== 'staff' ? navButton('customers','ข้อมูลลูกค้า','♙') : ''}
-            ${state.staff?.role !== 'staff' ? '<div class="side-label">PAYMENT OPERATIONS</div><div class="payment-nav-tree"><button type="button" class="payment-nav-toggle" id="payment-nav-toggle" aria-expanded="false"><span class="ico">▣</span><span>QR Payment Transactions</span><span class="payment-nav-caret">⌄</span></button><div class="payment-nav-sub" id="payment-nav-sub" hidden><button data-page="payment-overview">Dashboard Overview</button><button data-page="payment-transactions">Transactions</button><button data-page="payment-settings">Payment Settings</button></div></div>' : ''}
+            ${state.staff?.role !== 'staff' ? '<div class="side-label">PAYMENT OPERATIONS</div><div class="payment-nav-tree"><button type="button" class="payment-nav-toggle" id="payment-nav-toggle" aria-expanded="${state.paymentNavExpanded}"><span class="ico">▣</span><span>QR Payment Transactions</span><span class="payment-nav-caret">${state.paymentNavExpanded?'⌃':'⌄'}</span></button><div class="payment-nav-sub" id="payment-nav-sub" ${state.paymentNavExpanded?'':'hidden'}><button data-page="payment-overview">Dashboard Overview</button><button data-page="payment-transactions">Transactions</button><button data-page="payment-settings">Payment Settings</button></div></div>' : ''}
           </nav>
           <div class="side-foot">☕ &nbsp; ${esc(activeBranch()?.branch_name||'Café Amazon')}<br><span class="side-foot-meta">Store Management · Supabase</span></div>
         </aside>
@@ -192,10 +192,10 @@
     });
     const paymentToggle=$('#payment-nav-toggle'),paymentSub=$('#payment-nav-sub');
     if(paymentToggle&&paymentSub) paymentToggle.onclick=()=>{
-      const open=paymentSub.hidden;
-      paymentSub.hidden=!open;
-      paymentToggle.setAttribute('aria-expanded',String(open));
-      paymentToggle.querySelector('.payment-nav-caret').textContent=open?'⌃':'⌄';
+      state.paymentNavExpanded=!state.paymentNavExpanded;
+      paymentSub.hidden=!state.paymentNavExpanded;
+      paymentToggle.setAttribute('aria-expanded',String(state.paymentNavExpanded));
+      paymentToggle.querySelector('.payment-nav-caret').textContent=state.paymentNavExpanded?'⌃':'⌄';
     };
     const moreToggle=$('#mobile-more-toggle'), moreMenu=$('#mobile-more-menu');
     if(moreToggle&&moreMenu) moreToggle.onclick=()=>{
