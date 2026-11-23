@@ -471,6 +471,10 @@
     payment_matched:'ยืนยันรับชำระเงิน',
     payment_rejected:'ปฏิเสธสลิป / ไม่พบยอดเงิน',
     payment_needs_review:'ส่งตรวจสอบเพิ่มเติม',
+    payment_auto_verified:'ระบบตรวจสอบสลิปผ่านและยืนยัน Paid',
+    payment_auto_rejected:'ระบบปฏิเสธสลิปอัตโนมัติ',
+    payment_auto_verification_error:'ระบบตรวจสอบสลิปขัดข้อง',
+    payment_auto_verification_settings_updated:'เปลี่ยนการตั้งค่าตรวจสอบสลิปอัตโนมัติ',
     payment_settings_updated:'เปลี่ยนการตั้งค่า QR Payment'
   }[key]||key||'-');
 
@@ -532,7 +536,7 @@
       '<div class="kpi"><div class="label">ไม่ผ่านการตรวจสอบ</div><div class="value">'+rejected.length+'</div><div class="hint">รายการที่ถูกปฏิเสธ</div></div></div>'+
       '<div class="panel payment-panel"><div class="panel-title"><h3>รายการล่าสุดที่ต้องดำเนินการ</h3><button class="btn" data-goto="payment-transactions">ดูรายการทั้งหมด →</button></div>'+
       paymentRowsTable(rows.filter(x=>['submitted','needs_review','awaiting_payment'].includes(x.status)).slice(0,10))+'</div>'+
-      '<div class="alert info">ต้องตรวจสอบยอดเงินจริงจากแอปธนาคารหรือ Statement ก่อนยืนยัน Paid ระบบไม่ยืนยันจากภาพสลิปหรือยอดเงินที่ตรงกันเพียงอย่างเดียว</div>';
+      '<div class="alert info">ระบบตรวจสอบสลิปอัตโนมัติจะยืนยัน Paid เมื่อ EasySlip ตรวจสอบธุรกรรม บัญชีผู้รับ ยอดเงิน และการใช้สลิปซ้ำผ่านครบทุกเงื่อนไข</div>';
   }
   function viewPaymentTransactions() {
     const rows=state.paymentRows||[], q=String(state.paymentSearch||'').toLowerCase();
@@ -545,48 +549,38 @@
   }
   function viewPaymentSettings() {
     const p=state.paymentSettings||{}, enabled=p.qr_payment_enabled===true;
-    return paymentPageHead('QR Payment Settings','ตั้งค่าเปิด–ปิดการชำระเงินด้วย PromptPay QR ของร้าน')+
+    const autoEnabled=p.slip_auto_verify_enabled===true, providerReady=p.slip_verifier_configured===true;
+    return paymentPageHead('QR Payment Settings','ตั้งค่าการรับชำระเงินและการตรวจสอบสลิปอัตโนมัติ')+
       (state.paymentLoadError?'<div class="alert">'+esc(state.paymentLoadError)+'</div>':'')+
       '<div class="payment-settings-grid"><section class="panel payment-panel"><div class="panel-title"><h3>สถานะการรับชำระเงิน</h3><span class="badge '+(enabled?'ok':'warn')+'">'+(enabled?'เปิดใช้งาน':'ปิดใช้งาน')+'</span></div>'+
       '<label class="payment-switch-row"><span><b>เปิดรับชำระด้วย QR PromptPay</b><small>เมื่อปิด ลูกค้าจะเห็นข้อความให้ชำระเงินที่หน้าร้าน</small></span><input type="checkbox" id="payment-enabled" '+(enabled?'checked':'')+'></label>'+
       '<div class="field"><label>ข้อความแนะนำการชำระเงิน</label><textarea id="payment-customer-message">'+esc(p.customer_message||'กรุณาสแกน QR PromptPay และชำระเงินตามยอดคำสั่งซื้อ')+'</textarea></div>'+
       '<div class="field"><label>เวลารอชำระเงิน (นาที)</label><input id="payment-timeout" type="number" min="5" max="240" value="'+Number(p.payment_timeout_minutes||20)+'"></div>'+
-      '<div class="alert info">ลูกค้าชำระเงินด้วย QR แล้วส่งสลิปในแชต LINE OA ได้ พนักงานตรวจสอบยอดเงินจริงก่อนยืนยัน Paid</div><div class="actions"><button class="btn primary" id="payment-save-settings">บันทึกการตั้งค่า</button></div></section>'+
-      '<section class="panel payment-panel payment-qr-preview"><div class="panel-title"><h3>QR PromptPay ของร้าน</h3></div><img id="payment-qr-preview-image" src="'+esc(p.qr_image_url||PAYMENT_QR_URL)+'" alt="PromptPay QR"><div class="field"><label for="payment-qr-file">เลือกรูป QR PromptPay (PNG / JPG / WebP ไม่เกิน 5 MB)</label><input id="payment-qr-file" type="file" accept="image/png,image/jpeg,image/webp"></div><div class="actions"><button class="btn primary" id="payment-save-qr">บันทึก QR</button></div><div class="payment-qr-caption">รูป QR ที่บันทึกจะถูกใช้กับลูกค้าทุกคำสั่งซื้อของสาขานี้</div><div class="alert info">การตรวจสอบเงินยังเป็น Manual Verification ไม่มีการอ่าน Krungsri Simple หรือ Bank API อัตโนมัติ</div></section></div>'+
-      '<div class="alert info">เมื่อปิดระบบ ลูกค้าจะไม่เห็น QR และจะแสดงข้อความ: <b>ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า</b></div>';
+      '<div class="actions"><button class="btn primary" id="payment-save-settings">บันทึกการตั้งค่า</button></div></section>'+
+      '<section class="panel payment-panel payment-qr-preview"><div class="panel-title"><h3>QR PromptPay ของร้าน</h3></div><img id="payment-qr-preview-image" src="'+esc(p.qr_image_url||PAYMENT_QR_URL)+'" alt="PromptPay QR"><div class="field"><label for="payment-qr-file">เลือกรูป QR PromptPay (PNG / JPG / WebP ไม่เกิน 5 MB)</label><input id="payment-qr-file" type="file" accept="image/png,image/jpeg,image/webp"></div><div class="actions"><button class="btn primary" id="payment-save-qr">บันทึก QR</button></div><div class="payment-qr-caption">รูป QR ที่บันทึกจะถูกใช้กับลูกค้าทุกคำสั่งซื้อของสาขานี้</div></section></div>'+
+      '<section class="panel payment-panel" style="margin-top:16px"><div class="panel-title"><h3>Automatic Slip Verification · EasySlip</h3><span class="badge '+(providerReady?'ok':'warn')+'">'+(providerReady?'เชื่อมต่อแล้ว':'ยังไม่เชื่อมต่อ')+'</span></div>'+
+      '<label class="payment-switch-row"><span><b>เปิดตรวจสอบสลิปอัตโนมัติ</b><small>ระบบตรวจความถูกต้อง ยอดเงิน บัญชีผู้รับ และสลิปซ้ำ ก่อนเปลี่ยนเป็น Paid</small></span><input type="checkbox" id="payment-auto-verify" '+(autoEnabled?'checked':'')+'></label>'+
+      '<div class="field"><label>EasySlip API Key</label><input id="payment-easyslip-key" type="password" autocomplete="new-password" placeholder="'+(providerReady?'มี API Key บันทึกไว้แล้ว · ใส่ใหม่เมื่อต้องการเปลี่ยน':'วาง API Key ที่ได้จาก EasySlip')+'"></div>'+
+      '<div class="actions"><button class="btn primary" id="payment-save-verifier">ทดสอบการเชื่อมต่อและบันทึก</button></div>'+
+      '<div class="alert info">API Key จะถูกเก็บไว้ฝั่งเซิร์ฟเวอร์และไม่ส่งกลับมาแสดงบนหน้าเว็บ ต้องลงทะเบียนบัญชีรับเงินของร้านใน EasySlip ให้เรียบร้อยก่อนเปิดใช้งาน</div>'+
+      '<div class="alert '+(autoEnabled&&providerReady?'success':'info')+'">'+(autoEnabled&&providerReady?'ระบบพร้อมตรวจสอบสลิปอัตโนมัติ':'การตรวจสอบอัตโนมัติยังไม่เปิดใช้งาน')+'</div></section>'+
+      '<div class="alert info">เมื่อปิดระบบ QR ลูกค้าจะเห็นข้อความ: <b>ยืนยันคำสั่งซื้อเรียบร้อยแล้ว กรุณาชำระเงินที่หน้าร้านเมื่อมารับสินค้า</b></div>';
   }
+
   async function openPaymentDetail(id) {
     try {
       const result=await callPaymentApi('admin-detail',{transaction_id:id});
       const tx=result.transaction, audit=result.audit||[];
-      const canReview=['submitted','needs_review','rejected'].includes(tx.status);
       const proof=tx.slip_url?'<div class="payment-proof-wrap"><div class="payment-proof-heading">หลักฐานการชำระเงิน · '+esc(paymentSourceLabel(tx.submission_source))+'</div><a class="payment-proof-link" href="'+esc(tx.slip_url)+'" target="_blank" rel="noopener"><img class="payment-proof-image" src="'+esc(tx.slip_url)+'" alt="หลักฐานการโอน"></a><a href="'+esc(tx.slip_url)+'" target="_blank" rel="noopener" class="payment-proof-open">เปิดภาพขนาดเต็ม ↗</a></div>':'<div class="empty-state">ยังไม่มีหลักฐานสลิป</div>';
       const sh=modal('<div class="modal-head"><h3>QR Payment · '+esc(tx.order_number)+'</h3><button class="btn" data-close>ปิด</button></div>'+
-        '<div class="payment-detail-grid"><div><div class="payment-detail-label">ยอดที่ต้องชำระ</div><strong>฿'+money(tx.expected_amount)+'</strong></div><div><div class="payment-detail-label">สถานะการชำระ</div>'+paymentStatusBadge(tx.status)+'</div><div><div class="payment-detail-label">ช่องทางส่งสลิป</div><strong>'+esc(paymentSourceLabel(tx.submission_source))+'</strong></div><div><div class="payment-detail-label">Order ID</div><strong class="payment-detail-small">'+esc(tx.order_id||'-')+'</strong></div><div><div class="payment-detail-label">Branch ID</div><strong class="payment-detail-small">'+esc(tx.branch_id||'-')+'</strong></div><div><div class="payment-detail-label">ชื่อลูกค้า</div><strong class="payment-detail-small">'+esc(tx.customer_name||'-')+'</strong></div><div><div class="payment-detail-label">LINE User ID</div><strong class="payment-detail-small">'+esc(tx.customer_line_user_id||'-')+'</strong></div><div><div class="payment-detail-label">สร้างรายการเมื่อ</div><strong class="payment-detail-small">'+esc(tx.created_at?new Date(tx.created_at).toLocaleString('th-TH'):'-')+'</strong></div><div><div class="payment-detail-label">วันเวลาส่งสลิป</div><strong class="payment-detail-small">'+esc(tx.submitted_at?new Date(tx.submitted_at).toLocaleString('th-TH'):'ยังไม่ส่ง')+'</strong></div><div><div class="payment-detail-label">วันเวลาที่ระบุว่าโอน</div><strong class="payment-detail-small">'+esc(tx.transfer_at?new Date(tx.transfer_at).toLocaleString('th-TH'):'-')+'</strong></div><div><div class="payment-detail-label">ยอดเงินจริงที่ตรวจสอบ</div><input id="payment-actual-paid" type="number" min="0" step="0.01" value="'+(tx.paid_amount??tx.expected_amount)+'"></div><div><div class="payment-detail-label">เลขอ้างอิงธุรกรรม (ถ้ามี)</div><input id="payment-transfer-reference" value="'+esc(tx.transfer_reference||'')+'"></div><div><div class="payment-detail-label">ผู้ตรวจสอบ (User ID)</div><strong class="payment-detail-small">'+esc(tx.verified_by||'-')+'</strong></div><div><div class="payment-detail-label">เวลาตรวจสอบ</div><strong class="payment-detail-small">'+esc(tx.verified_at?new Date(tx.verified_at).toLocaleString('th-TH'):'-')+'</strong></div></div>'+
-        '<div class="field"><label>บันทึกการตรวจสอบ</label><textarea id="payment-review-note" placeholder="เช่น ตรวจพบเงินเข้าใน Krungsri Simple เวลา...">'+esc(tx.verification_note||'')+'</textarea></div>'+proof+
-        '<p class="help">เปิดแอปธนาคารหรือ Statement ตรวจสอบยอดเงินจริง ผู้รับเงิน และรายการอ้างอิงก่อนกดยืนยัน</p>'+
+        '<div class="payment-detail-grid"><div><div class="payment-detail-label">ยอดที่ต้องชำระ</div><strong>฿'+money(tx.expected_amount)+'</strong></div><div><div class="payment-detail-label">สถานะการชำระ</div>'+paymentStatusBadge(tx.status)+'</div><div><div class="payment-detail-label">ช่องทางส่งสลิป</div><strong>'+esc(paymentSourceLabel(tx.submission_source))+'</strong></div><div><div class="payment-detail-label">Order ID</div><strong class="payment-detail-small">'+esc(tx.order_id||'-')+'</strong></div><div><div class="payment-detail-label">สาขา</div><strong class="payment-detail-small">'+esc(tx.branch_id||'-')+'</strong></div><div><div class="payment-detail-label">ชื่อลูกค้า</div><strong class="payment-detail-small">'+esc(tx.customer_name||'-')+'</strong></div><div><div class="payment-detail-label">วันเวลาส่งสลิป</div><strong class="payment-detail-small">'+esc(tx.submitted_at?new Date(tx.submitted_at).toLocaleString('th-TH'):'ยังไม่ส่ง')+'</strong></div><div><div class="payment-detail-label">เลขอ้างอิงธุรกรรมที่ตรวจสอบได้</div><strong class="payment-detail-small">'+esc(tx.transfer_reference||'-')+'</strong></div><div><div class="payment-detail-label">เวลาที่ตรวจสอบ</div><strong class="payment-detail-small">'+esc(tx.verified_at?new Date(tx.verified_at).toLocaleString('th-TH'):'-')+'</strong></div></div>'+
+        '<div class="field"><label>ผลการตรวจสอบจากระบบ</label><textarea readonly>'+esc(tx.verification_note||'ยังไม่มีผลการตรวจสอบ')+'</textarea></div>'+proof+
         '<div class="payment-audit"><b>ประวัติรายการ</b>'+(audit.length?audit.map(a=>'<div><b>'+esc(paymentAuditLabel(a.action_key))+'</b><small class="payment-audit-meta">'+esc(new Date(a.created_at).toLocaleString('th-TH'))+' · '+esc(a.actor_ref||'-')+'</small></div>').join(''):'<div class="muted">ยังไม่มีประวัติ</div>')+'</div>'+
-        (canReview?'<div class="modal-foot payment-review-actions"><button class="btn danger" id="payment-reject">ไม่พบเงิน / ปฏิเสธ</button><button class="btn" id="payment-needs-review">ตรวจสอบเพิ่ม</button><button class="btn primary" id="payment-match">ยืนยันรับเงิน (Paid)</button></div>':'<div class="alert info">รายการนี้ยังไม่มีหลักฐานให้ตรวจสอบหรือได้รับการยืนยันรับเงินแล้ว</div>'));
+        '<div class="alert info">สถานะ Paid เปลี่ยนโดยระบบอัตโนมัติเท่านั้น เมื่อผู้ให้บริการตรวจสอบธุรกรรม ยอดเงิน บัญชีผู้รับ และรายการซ้ำผ่านครบเงื่อนไข</div>');
       sh.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$('.modal-bg').remove());
-      const submitReview=async decision=>{
-        const actual=Number($('#payment-actual-paid',sh).value), reference=$('#payment-transfer-reference',sh).value.trim(), note=$('#payment-review-note',sh).value.trim();
-        if(decision==='matched'&&actual!==Number(tx.expected_amount)){toast('ยอดเงินจริงไม่ตรงกับยอด Order');return;}
-        const button=decision==='matched'?$('#payment-match',sh):decision==='rejected'?$('#payment-reject',sh):$('#payment-needs-review',sh);
-        button.disabled=true;button.textContent='กำลังบันทึก…';
-        try {
-          if(decision==='matched'&&!confirm('ยืนยันว่าได้ตรวจสอบรายการเงินจริงในบัญชีธนาคารแล้ว และยอดตรงกับ Order ใช่หรือไม่?')){button.disabled=false;button.textContent='ยืนยันรับเงิน (Paid)';return;}
-          await callPaymentApi('admin-review',{transaction_id:id,decision,paid_amount:actual,transfer_reference:reference,note});
-          $('.modal-bg')?.remove();state.paymentLoadedBranch='';await loadPaymentRows('all');renderApp();
-          toast(decision==='matched'?'ยืนยันรับเงินเรียบร้อย':'อัปเดตผลการตรวจสอบแล้ว');
-        } catch(e) {button.disabled=false;button.textContent=decision==='matched'?'ยืนยันรับเงิน (Paid)':decision==='rejected'?'ไม่พบเงิน / ปฏิเสธ':'ตรวจสอบเพิ่ม';toast(e.message);}
-      };
-      if(canReview){
-        $('#payment-match',sh).onclick=()=>submitReview('matched');
-        $('#payment-reject',sh).onclick=()=>submitReview('rejected');
-        $('#payment-needs-review',sh).onclick=()=>submitReview('needs_review');
-      }
     } catch(e) {toast(e.message||'เปิดรายละเอียด Transaction ไม่สำเร็จ');}
   }
+
   function bindPaymentEvents() {
     const toggle=$('#payment-nav-toggle');
     if(toggle) toggle.onclick=()=>{
@@ -626,6 +620,18 @@
         const result=await callPaymentApi('admin-save-settings',{qr_payment_enabled:$('#payment-enabled').checked,qr_image_url:state.paymentSettings?.qr_image_url||PAYMENT_QR_URL,customer_message:$('#payment-customer-message').value.trim(),payment_timeout_minutes:Number($('#payment-timeout').value||20),require_slip:true});
         state.paymentSettings=result.settings;state.paymentSettingsBranch=state.branchId;renderApp();toast('บันทึก QR Payment Settings แล้ว');
       } catch(e) {btn.disabled=false;btn.textContent='บันทึกการตั้งค่า';toast(e.message);}
+    };
+    if($('#payment-save-verifier')) $('#payment-save-verifier').onclick=async()=>{
+      const btn=$('#payment-save-verifier');btn.disabled=true;btn.textContent='กำลังทดสอบ API Key…';
+      try{
+        const result=await callPaymentApi('admin-save-slip-verifier',{
+          api_key:$('#payment-easyslip-key').value.trim(),
+          enabled:$('#payment-auto-verify').checked
+        });
+        state.paymentSettings=result.settings;state.paymentSettingsBranch=state.branchId;renderApp();
+        const quota=result.settings?.slip_verifier_info?.quota_remaining;
+        toast('เชื่อมต่อ EasySlip สำเร็จ'+(quota==null?'':' · เหลือ '+quota+' ครั้ง'));
+      }catch(e){btn.disabled=false;btn.textContent='ทดสอบการเชื่อมต่อและบันทึก';toast(e.message);}
     };
   }
 
