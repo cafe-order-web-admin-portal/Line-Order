@@ -257,7 +257,21 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     if (status && status !== "all") query = query.eq("status", status);
     const { data, error } = await query;
     if (error) throw error;
-    const rows = await Promise.all((data || []).map(async row => ({ ...row, slip_url: await signedSlip(row.slip_path) })));
+    const transactionRows = data || [];
+    const transactionIds = transactionRows.map(row => row.id);
+    let lineSubmittedIds = new Set<string>();
+    if (transactionIds.length) {
+      const { data: lineEvents, error: lineEventsErr } = await admin.from("payment_audit_logs")
+        .select("transaction_id").in("transaction_id", transactionIds)
+        .eq("action_key", "proof_submitted_via_line");
+      if (lineEventsErr) throw lineEventsErr;
+      lineSubmittedIds = new Set((lineEvents || []).map(event => String(event.transaction_id)));
+    }
+    const rows = await Promise.all(transactionRows.map(async row => ({
+      ...row,
+      submission_source: lineSubmittedIds.has(String(row.id)) ? "line_oa" : row.slip_path ? "web_upload" : null,
+      slip_url: await signedSlip(row.slip_path),
+    })));
     return { success: true, transactions: rows };
   }
 
@@ -271,7 +285,16 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
       signedSlip(row.slip_path),
     ]);
     if (auditErr) throw auditErr;
-    return { success: true, transaction: { ...row, slip_url: slipUrl }, audit: audit || [] };
+    const submittedViaLine = (audit || []).some(event => event.action_key === "proof_submitted_via_line");
+    return {
+      success: true,
+      transaction: {
+        ...row,
+        submission_source: submittedViaLine ? "line_oa" : row.slip_path ? "web_upload" : null,
+        slip_url: slipUrl,
+      },
+      audit: audit || [],
+    };
   }
 
   if (action === "admin-review") {
