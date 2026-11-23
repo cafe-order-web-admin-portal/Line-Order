@@ -24,7 +24,7 @@
     db:null, session:null, user:null, staff:null, branches:[], categories:[],
     products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:(['dashboard','products','categories','options','import','history','customers','payment-overview','payment-transactions','payment-settings','payment-recovery'].includes(location.hash.slice(1))?location.hash.slice(1):'dashboard'), selectedOptionProduct:'', customerSearch:'',
     search:'', categoryFilter:'', importRows:[], importFileName:'', importErrors:[],
-    busy:false, paymentRows:[], paymentSettings:null, paymentLoadedBranch:'', paymentSettingsBranch:'', paymentLoadError:'', paymentStatusFilter:'all', paymentSearch:'', paymentLoading:false, paymentExpandedRows:new Set(), paymentRealtimeChannel:null, paymentRefreshTimer:null, paymentNavExpanded:false
+    busy:false, paymentRows:[], paymentSettings:null, paymentLoadedBranch:'', paymentSettingsBranch:'', paymentLoadError:'', paymentStatusFilter:'all', paymentSearch:'', paymentLoading:false, paymentExpandedRows:new Set(), paymentRealtimeChannel:null, paymentRefreshTimer:null, paymentNavExpanded:false, paymentRenderSig:''
   };
   const isSuper = () => state.staff?.role === 'super_admin';
   const isManager = () => state.staff?.role === 'manager';
@@ -516,7 +516,23 @@
       await Promise.all(jobs);
     } catch(e) { state.paymentLoadError=e.message||'โหลดข้อมูลการชำระเงินไม่สำเร็จ'; }
     finally {state.paymentLoading=false;}
-    if(paymentPageKeys.includes(state.page)) renderApp();
+    if(paymentPageKeys.includes(state.page)) {
+      // หน้า Payment รีเฟรชเองทุก 5 วินาที — วาดใหม่เฉพาะตอนข้อมูลเปลี่ยนจริง
+      // ถ้าวาดทุกรอบ ปุ่มและเมนูจะถูกสร้างใหม่ทั้งก้อน ทำให้กดแล้วไม่ติดและเมนูที่กางอยู่หุบเอง
+      const sig=paymentRenderSignature();
+      if(sig!==state.paymentRenderSig){state.paymentRenderSig=sig;renderApp();}
+    }
+  }
+  // ลายเซ็นของข้อมูลที่หน้า Payment ใช้วาด — ต่างจากเดิมเมื่อไรถึงวาดใหม่
+  // ไม่ใส่ slip_url เพราะเป็นลิงก์เซ็นชื่อที่เปลี่ยนทุกครั้งที่โหลด (จะทำให้วาดใหม่ตลอด)
+  // แต่ใส่ช่วงเวลา 10 นาที เพื่อให้ลิงก์สลิปถูกต่ออายุก่อนหมดอายุจริง (1 ชั่วโมง)
+  function paymentRenderSignature() {
+    return JSON.stringify([
+      state.page, state.branchId, state.paymentLoadError, state.paymentStatusFilter, state.paymentSearch,
+      Math.floor(Date.now()/600000),
+      (state.paymentRows||[]).map(r=>[r.id,r.status,r.updated_at,r.paid_amount,r.verification_note,r.slip_path]),
+      state.paymentSettings?[state.paymentSettings.qr_payment_enabled,state.paymentSettings.qr_image_url,state.paymentSettings.customer_message,state.paymentSettings.payment_timeout_minutes,state.paymentSettings.require_slip,state.paymentSettings.slip_auto_verify_enabled,state.paymentSettings.slip_verifier_configured]:null,
+    ]);
   }
   function startPaymentLiveUpdates() {
     if(!state.db||state.staff?.role==='staff')return;
@@ -624,12 +640,9 @@
   }
 
   function bindPaymentEvents() {
-    const toggle=$('#payment-nav-toggle');
-    if(toggle) toggle.onclick=()=>{
-      const sub=$('.payment-nav-sub'), open=sub?.hidden??true;
-      if(sub) sub.hidden=!open;
-      toggle.setAttribute('aria-expanded',String(open));
-    };
+    // ตัวพับเมนู QR Payment ผูกไว้ที่เดียวแล้วตอนวาดแถบเมนู (ตัวนั้นอัปเดต state + ลูกศรด้วย)
+    // เดิมมีตัวที่สองทับตรงนี้ ซึ่งสลับแค่ DOM ไม่แตะ state.paymentNavExpanded
+    // พอหน้า Payment วาดใหม่ เมนูจึงกลับไปอ่าน state เดิมแล้วหุบเอง — เอาออก อย่าผูกซ้ำอีก
     if($('#payment-refresh')) $('#payment-refresh').onclick=async()=>{
       state.paymentLoadedBranch='';state.paymentSettingsBranch='';await ensurePaymentPageData(true);
     };
