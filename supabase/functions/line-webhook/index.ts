@@ -21,6 +21,146 @@ async function verifySignature(rawBody: string, signature: string, secret: strin
 }
 type ChatAdmin = ReturnType<typeof createClient>;
 
+
+async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>, bytes: Uint8Array, mime: string) {
+  const branchId = String(tx.branch_id ?? "");
+  const { data: settings, error: settingsErr } = await admin.from("payment_settings")
+    .select("slip_auto_verify_enabled").eq("branch_id", branchId).maybeSingle();
+  if (settingsErr) throw settingsErr;
+  if (settings?.slip_auto_verify_enabled !== true) {
+    return { status: "submitted", message: "รับสลิปแล้ว ระบบรอตั้งค่าการตรวจสอบอัตโนมัติ", auto_verified: false };
+  }
+
+  const { data: credential, error: credentialErr } = await admin.from("payment_provider_credentials")
+    .select("api_key").eq("branch_id", branchId).eq("provider", "easyslip").maybeSingle();
+  if (credentialErr) throw credentialErr;
+  const apiKey = String(credential?.api_key ?? "").trim();
+  if (!apiKey) {
+    return { status: "needs_review", message: "ระบบตรวจสอบสลิปยังไม่มี API Key กรุณาส่งสลิปอีกครั้งหลังตั้งค่าระบบ", auto_verified: false };
+  }
+
+  let response: Response;
+  let payload: Record<string, any> = {};
+  try {
+    const form = new FormData();
+    const ext = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
+    form.append("image", new Blob([bytes], { type: mime }), "payment-slip." + ext);
+    form.append("remark", String(tx.order_number ?? "").slice(0, 255));
+    form.append("matchAccount", "true");
+    form.append("matchAmount", String(Math.round(Number(tx.expected_amount) * 100) / 100));
+    form.append("checkDuplicate", "true");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
+    try {
+      response = await fetch("https://api.easyslip.com/v2/verify/bank", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + apiKey },
+        body: form,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    payload = await response.json().catch(() => ({}));
+  } catch (error) {
+    const note = error instanceof Error && error.name === "AbortError"
+      ? "EasySlip verification timed out"
+      : "EasySlip connection failed";
+    await admin.from("payment_transactions").update({
+      status: "needs_review", verification_note: note, verified_by: null,
+      verified_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }).eq("id", tx.id).eq("status", "submitted");
+    await admin.from("payment_audit_logs").insert({
+      transaction_id: tx.id, order_id: tx.order_id, branch_id: branchId,
+      actor_ref: "system:easyslip", action_key: "payment_auto_verification_error",
+      before_state: { status: "submitted" }, after_state: { status: "needs_review", note },
+    });
+    return { status: "needs_review", message: "ระบบตรวจสอบขัดข้องชั่วคราว กรุณาส่งสลิปอีกครั้ง", auto_verified: false };
+  }
+
+  const data = payload?.data ?? {};
+  const rawSlip = data?.rawSlip ?? {};
+  const verifiedAmount = Number(data?.amountInSlip ?? rawSlip?.amount?.amount);
+  const expectedAmount = Math.round(Number(tx.expected_amount) * 100) / 100;
+  const transferRef = String(rawSlip?.transRef ?? "").trim();
+  const receiverMatch = data?.matchedAccount;
+  const transferDate = rawSlip?.date ? new Date(rawSlip.date) : null;
+  const currency = String(rawSlip?.amount?.local?.currency ?? "THB").toUpperCase();
+  const countryCode = String(rawSlip?.countryCode ?? "").toUpperCase();
+
+  let rejectionReason = "";
+  let transientReason = "";
+  if (!response.ok || payload?.success !== true) {
+    const code = String(payload?.error?.code ?? "");
+    const terminalCodes = ["SLIP_NOT_FOUND", "DUPLICATE_SLIP", "AMOUNT_MISMATCH", "ACCOUNT_NOT_MATCHED", "INVALID_SLIP", "INVALID_QR"];
+    if (terminalCodes.includes(code) || [400, 404, 422].includes(response.status)) rejectionReason = String(payload?.error?.message ?? "สลิปไม่ถูกต้อง");
+    else transientReason = String(payload?.error?.message ?? ("EasySlip HTTP " + response.status));
+  } else if (data?.isDuplicate === true) {
+    rejectionReason = "สลิปนี้ถูกใช้ตรวจสอบแล้ว";
+  } else if (!Number.isFinite(verifiedAmount) || Math.abs(verifiedAmount - expectedAmount) > 0.004) {
+    rejectionReason = "ยอดเงินในสลิปไม่ตรงกับยอดคำสั่งซื้อ";
+  } else if (data?.isAmountMatched === false) {
+    rejectionReason = "ยอดเงินไม่ผ่านการจับคู่";
+  } else if (!receiverMatch || !String(receiverMatch?.bankNumber ?? "").trim()) {
+    rejectionReason = "บัญชีผู้รับไม่ตรงกับบัญชีที่ลงทะเบียนไว้ใน EasySlip";
+  } else if (!transferRef) {
+    rejectionReason = "ไม่พบเลขอ้างอิงธุรกรรมจากสลิป";
+  } else if (countryCode !== "TH" || currency !== "THB") {
+    rejectionReason = "รองรับเฉพาะสลิปโอนเงินบาทภายในประเทศไทย";
+  } else if (!transferDate || !Number.isFinite(transferDate.getTime())) {
+    rejectionReason = "ไม่พบวันเวลาโอนที่ตรวจสอบได้";
+  }
+
+  if (!rejectionReason && !transientReason) {
+    const { data: duplicateRef, error: duplicateErr } = await admin.from("payment_transactions")
+      .select("id,order_number").eq("transfer_reference", transferRef).neq("id", tx.id).limit(1).maybeSingle();
+    if (duplicateErr) throw duplicateErr;
+    if (duplicateRef) rejectionReason = "เลขอ้างอิงธุรกรรมนี้ถูกใช้กับ Order " + duplicateRef.order_number + " แล้ว";
+  }
+
+  const now = new Date().toISOString();
+  const passed = !rejectionReason && !transientReason;
+  const nextStatus = passed ? "matched" : rejectionReason ? "rejected" : "needs_review";
+  const note = passed
+    ? "ตรวจสอบอัตโนมัติผ่าน EasySlip: ยอด " + verifiedAmount.toFixed(2) + " บาท / Receiver matched / Duplicate check passed"
+    : rejectionReason || ("ระบบตรวจสอบอัตโนมัติไม่สำเร็จ: " + transientReason);
+  const updates: Record<string, any> = {
+    status: nextStatus, verification_note: note, verified_by: null, verified_at: now, updated_at: now,
+    paid_amount: passed ? verifiedAmount : null,
+    transfer_reference: passed ? transferRef : null,
+    transfer_at: passed ? transferDate!.toISOString() : null,
+  };
+  const { data: updated, error: updateErr } = await admin.from("payment_transactions")
+    .update(updates).eq("id", tx.id).eq("status", "submitted").select("id").maybeSingle();
+  if (updateErr) throw updateErr;
+  if (!updated) {
+    const { data: current } = await admin.from("payment_transactions").select("status").eq("id", tx.id).maybeSingle();
+    return { status: current?.status ?? "needs_review", message: "ระบบรับสลิปนี้ไว้แล้ว", auto_verified: current?.status === "matched" };
+  }
+  const { error: orderErr } = await admin.from("orders")
+    .update({ payment_status: passed ? "paid" : rejectionReason ? "unpaid" : "pending_verification" })
+    .eq("id", tx.order_id);
+  if (orderErr) throw orderErr;
+  const { error: auditErr } = await admin.from("payment_audit_logs").insert({
+    transaction_id: tx.id, order_id: tx.order_id, branch_id: branchId,
+    actor_ref: "system:easyslip",
+    action_key: passed ? "payment_auto_verified" : rejectionReason ? "payment_auto_rejected" : "payment_auto_verification_error",
+    before_state: { status: "submitted" },
+    after_state: {
+      status: nextStatus, provider: "easyslip", amount: passed ? verifiedAmount : null,
+      transfer_reference: passed ? transferRef : null,
+      receiver_bank: passed ? String(receiverMatch?.bank?.shortCode ?? receiverMatch?.bank?.code ?? "") : null,
+      receiver_account_masked: passed ? String(receiverMatch?.bankNumber ?? "") : null,
+      note,
+    },
+  });
+  if (auditErr) throw auditErr;
+
+  if (passed) return { status: "matched", message: "ตรวจสอบสลิปสำเร็จ ระบบยืนยันการชำระเงินแล้ว", auto_verified: true };
+  if (rejectionReason) return { status: "rejected", message: "สลิปไม่ผ่านการตรวจสอบ: " + rejectionReason + " กรุณาตรวจสอบและส่งสลิปที่ถูกต้อง", auto_verified: false };
+  return { status: "needs_review", message: "ระบบตรวจสอบไม่สำเร็จชั่วคราว กรุณาส่งสลิปอีกครั้ง", auto_verified: false };
+}
+
 async function recordChat(
   admin: ChatAdmin | null,
   branchId: string | null,
@@ -187,9 +327,9 @@ Deno.serve(async (req: Request) => {
         const digest = await crypto.subtle.digest("SHA-256", bytes);
         const hash = Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, "0")).join("");
         const { data: candidates, error: txError } = await admin.from("payment_transactions")
-          .select("id,order_id,order_number,status,slip_sha256,updated_at,orders!inner(order_status,payment_status)")
+          .select("id,order_id,branch_id,order_number,expected_amount,status,slip_sha256,updated_at,orders!inner(order_status,payment_status)")
           .eq("branch_id", branchId).eq("customer_line_user_id", lineUserId)
-          .in("status", ["awaiting_payment", "rejected"])
+          .in("status", ["awaiting_payment", "rejected", "needs_review"])
           .not("orders.order_status", "in", "(cancelled,completed)")
           .order("created_at", { ascending: false }).limit(2);
         if (txError) throw txError;
@@ -204,11 +344,11 @@ Deno.serve(async (req: Request) => {
           const amountUpdatedAt = Date.parse(String(tx.updated_at ?? ""));
           if (Number.isFinite(eventTime) && Number.isFinite(amountUpdatedAt) && eventTime < amountUpdatedAt) {
             message = "คำสั่งซื้อมีการเปลี่ยนแปลงยอดหลังจากส่งภาพนี้ครับ กรุณาตรวจสอบยอดล่าสุดในหน้าคำสั่งซื้อและโอนตามยอดใหม่ก่อนส่งสลิปอีกครั้ง";
-          } else if (tx.slip_sha256 === hash) {
+          } else if (tx.slip_sha256 === hash && !["needs_review", "rejected"].includes(String(tx.status))) {
             message = "ได้รับสลิปนี้เรียบร้อยแล้วครับ ร้านกำลังตรวจสอบยอดเงินจริง";
           } else {
             const { data: duplicate, error: duplicateError } = await admin.from("payment_transactions")
-              .select("id,order_number").eq("slip_sha256", hash).maybeSingle();
+              .select("id,order_number").eq("slip_sha256", hash).neq("id", tx.id).limit(1).maybeSingle();
             if (duplicateError) throw duplicateError;
             if (duplicate) {
               message = "สลิปภาพนี้ถูกส่งใช้กับคำสั่งซื้อ " + duplicate.order_number + " แล้วครับ กรุณาตรวจสอบก่อนส่งอีกครั้ง";
@@ -219,9 +359,10 @@ Deno.serve(async (req: Request) => {
               if (uploadError) throw uploadError;
               const now = new Date().toISOString();
               const { error: updateError } = await admin.from("payment_transactions").update({
-                status: "submitted", slip_path: path, slip_sha256: hash, submitted_at: now, updated_at: now,
+                status: "submitted", slip_path: path, slip_sha256: hash, transfer_reference: null,
+                transfer_at: null, submitted_at: now, updated_at: now,
                 verification_note: null, paid_amount: null, verified_by: null, verified_at: null,
-              }).eq("id", tx.id).in("status", ["awaiting_payment", "rejected"]);
+              }).eq("id", tx.id).in("status", ["awaiting_payment", "rejected", "needs_review"]);
               if (updateError) throw updateError;
               const { error: orderError } = await admin.from("orders").update({ payment_status: "pending_verification" }).eq("id", tx.order_id);
               if (orderError) throw orderError;
@@ -232,7 +373,8 @@ Deno.serve(async (req: Request) => {
                 after_state: { status: "submitted", slip_sha256: hash, line_message_id: String(event.message.id ?? "") },
               });
               if (auditError) throw auditError;
-              message = "รับสลิปสำหรับคำสั่งซื้อ " + tx.order_number + " เรียบร้อยแล้วครับ ร้านจะตรวจสอบยอดเงินจริงก่อนยืนยันการชำระเงิน";
+              const verification = await runAutoSlipVerification(admin, { ...tx, branch_id: branchId }, bytes, mime);
+              message = verification.message + " (Order " + tx.order_number + ")";
             }
           }
         }
