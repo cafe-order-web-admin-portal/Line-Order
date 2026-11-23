@@ -27,6 +27,16 @@ Updated: 2026-11-23 (รอบ 2 · Claude)
 - **ตัวตรวจซ้ำเบื้องหลัง `payment-portal?__retry=1` ไม่ได้อยู่ใน `cron.job`** มีตัวเรียกจากข้างนอกยิงทุกนาที (ยืนยันด้วย `CRON_KEY`) → แก้พฤติกรรมมันต้อง deploy โค้ดเท่านั้น
 - ทดสอบจริง 2 รอบด้วยเงินจริง (B0001-261123105318-D0F9AD): โอน → ส่งสลิป → พักรอ → ตรวจซ้ำผ่านเอง → แจ้ง LINE รวม **ไม่ถึง 2 นาที** ไม่ต้องให้ร้านกดอะไร
 
+## รอบ 3 — ปรับลำดับ LINE OA แจ้งเตือนหลังยืนยัน Order (2026-11-23)
+
+- Production Edge Function `create-order` deployed **v27 ACTIVE**.
+- Removed only the immediate customer LINE OA `pending/order_created` push after LIFF order creation. This avoids notifying the customer before the LIFF payment step is completed.
+- Staff new-order LINE push via `LINE_ORDER_NOTIFY_TO` remains unchanged.
+- Order creation still calls `create_liff_order`; no payment function, QR, slip, EasySlip, payment transaction, or payment-status logic was changed.
+- LIFF button progress copy changed from `กำลังส่งคำสั่งซื้อ…` to `ระบบกำลังพาไปหน้าชำระเงิน…` in PR #28. This UI change is pending merge/deployment.
+- **Source-sync warning:** the live `create-order` v26 source was retrieved and used as the exact deployment baseline for v27. The corresponding source file was not found at the expected `supabase/functions/create-order/index.ts` path in the repository. Before any future deploy, first add/sync the live v27 source into the canonical repository path and compare it against production; do not deploy an older local copy.
+- Static post-deploy checks: customer pending push absent; staff notification remains; `create_liff_order` call remains; function status ACTIVE v27. No test order/payment was created.
+
 ## รอบ 2 — แก้ UI ตามที่เจ้าของแจ้ง
 1. **ข้อความตอนรับสลิป** เปลี่ยนเป็น "ได้รับข้อมูลสลิปชำระเงินเรียบร้อยแล้ว ตรวจสอบข้อมูลสักครู่" (ต่อท้ายด้วย `(Order …)` เหมือนเดิม) — `line-webhook` v38
 2. **ปุ่มบันทึกรูป QR** ในหน้าชำระเงินของลูกค้า (`cafe-amazon-liff-index.html` → `saveQrImage()`)

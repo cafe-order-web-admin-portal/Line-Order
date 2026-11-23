@@ -1409,7 +1409,7 @@ async function submitOrder(){
   const items=[...cart.values()].map(x=>({product_id:x.product.id,quantity:x.qty,option_ids:x.optionIds}));
   const snapshot=[...cart.values()].map(x=>({...x,optionIds:[...x.optionIds]}));
   const button=$('confirm-order');button.disabled=true;
-  button.textContent=editingPendingOrder?'กำลังคำนวณยอดคำสั่งซื้อใหม่…':'กำลังส่งคำสั่งซื้อ…';
+  button.textContent=editingPendingOrder?'กำลังคำนวณยอดคำสั่งซื้อใหม่…':'ระบบกำลังพาไปหน้าชำระเงิน…';
   try{
     if(editingPendingOrder&&pendingPaymentOrder){
       const response=await fetch(PAYMENT_FUNCTION_URL,{
