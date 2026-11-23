@@ -22,9 +22,9 @@
   };
   const state = {
     db:null, session:null, user:null, staff:null, branches:[], categories:[],
-    products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:(['dashboard','products','categories','options','import','history','customers'].includes(location.hash.slice(1))?location.hash.slice(1):'dashboard'), selectedOptionProduct:'', customerSearch:'',
+    products:[], branchProducts:[], history:[], customers:[], chatMessages:[], selectedChatUserId:'', optionGroups:[], options:[], optionGroupProducts:[], productOptionLinks:[], branchId:'', page:(['dashboard','products','categories','options','import','history','customers','payment-overview','payment-transactions','payment-settings'].includes(location.hash.slice(1))?location.hash.slice(1):'dashboard'), selectedOptionProduct:'', customerSearch:'',
     search:'', categoryFilter:'', importRows:[], importFileName:'', importErrors:[],
-    busy:false
+    busy:false, paymentRows:[], paymentSettings:null, paymentLoadedBranch:'', paymentSettingsBranch:'', paymentLoadError:'', paymentStatusFilter:'all', paymentSearch:'', paymentLoading:false
   };
   const isSuper = () => state.staff?.role === 'super_admin';
   const isManager = () => state.staff?.role === 'manager';
@@ -141,8 +141,8 @@
     const roleLabel={super_admin:'Super Admin',manager:'Manager',staff:'Staff'}[state.staff?.role]||state.staff?.role;
     const morePages = [];
     if(isSuper()) morePages.push(['categories','หมวดหมู่','categories'],['options','ตัวเลือกสินค้า','options']);
-    if(state.staff?.role !== 'staff') morePages.push(['history','ประวัติ Import','history'],['customers','ข้อมูลลูกค้า','customers']);
-    const moreActive = ['categories','options','history','customers'].includes(state.page);
+    if(state.staff?.role !== 'staff') morePages.push(['history','ประวัติ Import','history'],['customers','ข้อมูลลูกค้า','customers'],['payment-overview','QR Payment Overview','history'],['payment-transactions','Payment Transactions','history'],['payment-settings','Payment Settings','options']);
+    const moreActive = ['categories','options','history','customers','payment-overview','payment-transactions','payment-settings'].includes(state.page);
     const mobileMore = morePages.length
       ? morePages.map(([key,label,ico])=>`<button type="button" data-page="${key}">${mobileIcon(ico)}<span>${label}</span></button>`).join('')
       : '<div class="mobile-more-empty">ไม่มีเมนูเพิ่มเติมสำหรับบัญชีนี้</div>';
@@ -160,6 +160,7 @@
             ${state.staff?.role !== 'staff' ? navButton('import','Import ข้อมูล','⇧') : ''}
             ${state.staff?.role !== 'staff' ? navButton('history','ประวัติ Import','◷') : ''}
             ${state.staff?.role !== 'staff' ? navButton('customers','ข้อมูลลูกค้า','♙') : ''}
+            ${state.staff?.role !== 'staff' ? '<div class="side-label">PAYMENT OPERATIONS</div><div class="payment-nav-tree"><button type="button" class="payment-nav-toggle" id="payment-nav-toggle" aria-expanded="true"><span class="ico">▣</span><span>QR Payment Transactions</span><span class="payment-nav-caret">⌄</span></button><div class="payment-nav-sub"><button data-page="payment-overview">Dashboard Overview</button><button data-page="payment-transactions">Transactions</button><button data-page="payment-settings">Payment Settings</button></div></div>' : ''}
           </nav>
           <div class="side-foot">☕ &nbsp; ${esc(activeBranch()?.branch_name||'Café Amazon')}<br><span class="side-foot-meta">Store Management · Supabase</span></div>
         </aside>
@@ -200,7 +201,7 @@
     $('#refresh-btn').onclick=async()=>{try{await reloadData();renderApp();toast('โหลดข้อมูลล่าสุดแล้ว')}catch(e){toast(e.message)}};
     bindPageEvents();
   }
-  function pageTitle(){return ({dashboard:'ภาพรวม',products:'จัดการสินค้า',categories:'จัดการหมวดหมู่',options:'ตัวเลือกสินค้า',import:'นำเข้าข้อมูล',history:'ประวัติการนำเข้า',customers:'ข้อมูลลูกค้า LINE'})[state.page]||'Web Admin Portal';}
+  function pageTitle(){return ({dashboard:'ภาพรวม',products:'จัดการสินค้า',categories:'จัดการหมวดหมู่',options:'ตัวเลือกสินค้า',import:'นำเข้าข้อมูล',history:'ประวัติการนำเข้า',customers:'ข้อมูลลูกค้า LINE','payment-overview':'QR Payment Overview','payment-transactions':'QR Payment Transactions','payment-settings':'QR Payment Settings'})[state.page]||'Web Admin Portal';}
   function renderPage(){
     if(state.page==='dashboard') return viewDashboard();
     if(state.page==='products') return viewProducts();
@@ -209,6 +210,9 @@
     if(state.page==='import') return (state.staff?.role!=='staff')?viewImport():'<div class="alert">ไม่มีสิทธิ์นำเข้าข้อมูล</div>'; 
     if(state.page==='history') return (state.staff?.role!=='staff')?viewHistory():'<div class="alert">ไม่มีสิทธิ์ดูประวัติ Import</div>';
     if(state.page==='customers') return (state.staff?.role!=='staff')?viewCustomers():'<div class="alert">ไม่มีสิทธิ์ดูข้อมูลลูกค้า</div>';
+    if(state.page==='payment-overview') return (state.staff?.role!=='staff')?viewPaymentOverview():'<div class="alert">ไม่มีสิทธิ์เข้าถึงข้อมูลการชำระเงิน</div>';
+    if(state.page==='payment-transactions') return (state.staff?.role!=='staff')?viewPaymentTransactions():'<div class="alert">ไม่มีสิทธิ์เข้าถึงข้อมูลการชำระเงิน</div>';
+    if(state.page==='payment-settings') return (state.staff?.role!=='staff')?viewPaymentSettings():'<div class="alert">ไม่มีสิทธิ์เข้าถึงข้อมูลการชำระเงิน</div>';
     return '';
   }
 
