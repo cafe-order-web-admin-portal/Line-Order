@@ -185,7 +185,7 @@ async function runAutoSlipVerification(tx: Record<string, any>, bytes: Uint8Arra
   const transferRef = String(rawSlip?.transRef ?? "").trim();
   const receiverMatch = data?.matchedAccount;
   const transferDate = rawSlip?.date ? new Date(rawSlip.date) : null;
-  const currency = String(rawSlip?.amount?.local?.currency ?? "THB").toUpperCase();
+  const currency = String(rawSlip?.amount?.local?.currency ?? "").toUpperCase();
   const countryCode = String(rawSlip?.countryCode ?? "").toUpperCase();
 
   let rejectionReason = "";
@@ -201,7 +201,7 @@ async function runAutoSlipVerification(tx: Record<string, any>, bytes: Uint8Arra
     rejectionReason = "ยอดเงินในสลิปไม่ตรงกับยอดคำสั่งซื้อ";
   } else if (data?.isAmountMatched === false) {
     rejectionReason = "ยอดเงินไม่ผ่านการจับคู่";
-  } else if (!receiverMatch || !String(receiverMatch?.bankNumber ?? "").trim()) {
+  } else if (!receiverMatch || !String(receiverMatch?.bankNumber ?? "").trim() || !rawSlip?.receiver?.bank?.id) {
     rejectionReason = "บัญชีผู้รับไม่ตรงกับบัญชีที่ลงทะเบียนไว้ใน EasySlip";
   } else if (!transferRef) {
     rejectionReason = "ไม่พบเลขอ้างอิงธุรกรรมจากสลิป";
@@ -209,6 +209,13 @@ async function runAutoSlipVerification(tx: Record<string, any>, bytes: Uint8Arra
     rejectionReason = "รองรับเฉพาะสลิปโอนเงินบาทภายในประเทศไทย";
   } else if (!transferDate || !Number.isFinite(transferDate.getTime())) {
     rejectionReason = "ไม่พบวันเวลาโอนที่ตรวจสอบได้";
+  } else if (currency !== "THB") {
+    rejectionReason = "สกุลเงินในสลิปไม่ใช่ THB";
+  } else if (Number.isFinite(Date.parse(String(tx.created_at ?? ""))) &&
+    transferDate.getTime() < Date.parse(String(tx.created_at)) - 5 * 60 * 1000) {
+    rejectionReason = "วันเวลาโอนเกิดก่อนสร้างคำสั่งซื้อ";
+  } else if (transferDate.getTime() > Date.now() + 5 * 60 * 1000) {
+    rejectionReason = "วันเวลาโอนอยู่ในอนาคต";
   }
 
   if (!rejectionReason && !transientReason) {
@@ -250,7 +257,7 @@ async function runAutoSlipVerification(tx: Record<string, any>, bytes: Uint8Arra
       status: nextStatus, provider: "easyslip", amount: passed ? verifiedAmount : null,
       transfer_reference: passed ? transferRef : null,
       receiver_bank: passed ? String(receiverMatch?.bank?.shortCode ?? receiverMatch?.bank?.code ?? "") : null,
-      receiver_account_masked: passed ? String(receiverMatch?.bankNumber ?? "") : null,
+      receiver_account_last4: passed ? String(receiverMatch?.bankNumber ?? "").replace(/\D/g, "").slice(-4) : null,
       note,
     },
   });
@@ -468,7 +475,7 @@ async function handle(body: Obj, req: Request): Promise<Obj> {
     const apiKey = apiKeyInput || String(currentCredential?.api_key || "");
     if (enabled && !apiKey) throw new Error("กรุณาใส่ EasySlip API Key ก่อนเปิดตรวจสอบอัตโนมัติ");
     let providerInfo = null;
-    if (apiKey) {
+    if (apiKey && (apiKeyInput || enabled)) {
       const infoResponse = await fetch("https://api.easyslip.com/v2/info", {
         headers: { Authorization: "Bearer " + apiKey },
       });
