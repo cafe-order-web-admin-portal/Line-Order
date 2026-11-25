@@ -21,6 +21,43 @@ async function verifySignature(rawBody: string, signature: string, secret: strin
 }
 type ChatAdmin = ReturnType<typeof createClient>;
 
+// แจ้งเตือนพนักงานทาง LINE OA ฝั่งพนักงาน (คนละ OA กับของลูกค้า)
+// ผู้รับ = คนที่เจ้าของติ๊กไว้ในหลังร้าน > ผู้ใช้ > "แจ้งเตือน LINE" (อ่านผ่าน view public.cms_staff_notify)
+// ไม่ตั้ง STAFF_LINE_TOKEN = ข้ามเงียบ · กลืน error ทุกกรณี ห้ามทำให้การตรวจสลิปล้ม
+// ไม่บันทึก LINE user id ลง log (ข้อมูลส่วนตัวพนักงาน) บันทึกแค่ cms_ref
+async function notifyStaff(admin: ChatAdmin, eventKey: string, text: string) {
+  try {
+    const token = (Deno.env.get("STAFF_LINE_TOKEN") ?? "").trim();
+    if (!token) return { sent: 0, skipped: "no_token" };
+    const { data: rows, error } = await admin.from("cms_staff_notify")
+      .select("cms_ref,line_user_id,events,is_active").eq("is_active", true);
+    if (error) throw error;
+    const targets = (rows || []).filter((r: Record<string, any>) => {
+      const ev = Array.isArray(r.events) ? r.events.map((x: unknown) => String(x)) : [];
+      return ev.includes(eventKey) || ev.includes("*");
+    });
+    if (!targets.length) return { sent: 0, skipped: "no_subscriber" };
+    let sent = 0;
+    await Promise.all(targets.map(async (r: Record<string, any>) => {
+      try {
+        const res = await fetch("https://api.line.me/v2/bot/message/push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          body: JSON.stringify({ to: String(r.line_user_id), messages: [{ type: "text", text: text.slice(0, 4900) }] }),
+        });
+        if (res.ok) sent++;
+        else console.error("staff notify failed", { cms_ref: String(r.cms_ref), http_status: res.status });
+      } catch (_e) {
+        console.error("staff notify error", { cms_ref: String(r.cms_ref) });
+      }
+    }));
+    return { sent, of: targets.length };
+  } catch (e) {
+    console.error("staff notify lookup failed", String((e as Error)?.message || e).slice(0, 200));
+    return { sent: 0, skipped: "error" };
+  }
+}
+
 
 async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>, bytes: Uint8Array, mime: string) {
   const branchId = String(tx.branch_id ?? "");
@@ -224,9 +261,29 @@ async function runAutoSlipVerification(admin: ChatAdmin, tx: Record<string, any>
   });
   if (auditErr) throw auditErr;
 
-  if (passed) return { status: "matched", message: "ตรวจสอบสลิปสำเร็จ ระบบยืนยันการชำระเงินแล้ว", auto_verified: true };
-  if (rejectionReason) return { status: "rejected", message: "สลิปไม่ผ่านการตรวจสอบ: " + rejectionReason + " กรุณาตรวจสอบและส่งสลิปที่ถูกต้อง", auto_verified: false };
+  if (passed) {
+    await notifyStaff(admin, "pay",
+      "\u2705 \u0e25\u0e39\u0e01\u0e04\u0e49\u0e32\u0e0a\u0e33\u0e23\u0e30\u0e40\u0e07\u0e34\u0e19\u0e41\u0e25\u0e49\u0e27\n"
+      + "Order " + String(tx.order_number ?? "") + "\n"
+      + "\u0e22\u0e2d\u0e14 " + verifiedAmount.toFixed(2) + " \u0e1a\u0e32\u0e17\n"
+      + "\u0e23\u0e30\u0e1a\u0e1a\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e25\u0e34\u0e1b\u0e1c\u0e48\u0e32\u0e19\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34 \u0e44\u0e21\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e01\u0e14\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e0b\u0e49\u0e33");
+    return { status: "matched", message: "ตรวจสอบสลิปสำเร็จ ระบบยืนยันการชำระเงินแล้ว", auto_verified: true };
+  }
+  if (rejectionReason) {
+    await notifyStaff(admin, "pay",
+      "\u26a0\ufe0f \u0e2a\u0e25\u0e34\u0e1b\u0e44\u0e21\u0e48\u0e1c\u0e48\u0e32\u0e19\u0e01\u0e32\u0e23\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\n"
+      + "Order " + String(tx.order_number ?? "") + "\n"
+      + "\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25: " + rejectionReason + "\n"
+      + "\u0e40\u0e07\u0e34\u0e19\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e40\u0e02\u0e49\u0e32 \u0e15\u0e49\u0e2d\u0e07\u0e15\u0e34\u0e14\u0e15\u0e48\u0e2d\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32");
+    return { status: "rejected", message: "สลิปไม่ผ่านการตรวจสอบ: " + rejectionReason + " กรุณาตรวจสอบและส่งสลิปที่ถูกต้อง", auto_verified: false };
+  }
   if (reviewReason) {
+    await notifyStaff(admin, "pay",
+      "\ud83d\udd0e \u0e23\u0e2d\u0e23\u0e49\u0e32\u0e19\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e01\u0e32\u0e23\u0e0a\u0e33\u0e23\u0e30\u0e40\u0e07\u0e34\u0e19\n"
+      + "Order " + String(tx.order_number ?? "") + "\n"
+      + (Number.isFinite(verifiedAmount) ? "\u0e22\u0e2d\u0e14 " + verifiedAmount.toFixed(2) + " \u0e1a\u0e32\u0e17\n" : "")
+      + reviewReason + "\n"
+      + "\u0e40\u0e1b\u0e34\u0e14\u0e2b\u0e25\u0e31\u0e07\u0e23\u0e49\u0e32\u0e19 > QR Payment \u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e15\u0e23\u0e27\u0e08\u0e41\u0e25\u0e30\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19");
     return { status: "needs_review", message: "ระบบได้รับสลิปแล้ว และยอดเงินตรงกับคำสั่งซื้อ · รอร้านยืนยันอีกครั้งครับ ไม่ต้องส่งสลิปใหม่", auto_verified: false };
   }
   // ธนาคารยังเผยแพร่รายการไม่ครบ — สลิปอยู่ในระบบแล้ว ระบบจะตรวจซ้ำให้เองทุกนาที

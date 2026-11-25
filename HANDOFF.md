@@ -1,11 +1,11 @@
 # HANDOFF — Line-Order Payment Operations
 
-Updated: 2026-11-23 (รอบ 2 · Claude)
+Updated: 2026-11-25 (รอบ 4 · Claude)
 
 ## Current deployment
 - Supabase project: `ytxbnqosenolojifeikf`
-- `payment-portal`: **v21** ACTIVE
-- `line-webhook`: **v39** ACTIVE
+- `payment-portal`: **v22** ACTIVE
+- `line-webhook`: **v40** ACTIVE
 - `update-order-status`: v21 ACTIVE
 
 > **สำคัญ — ซอร์สใน `supabase/functions/` เคยล้าหลังของจริงมาก** (payment-portal 689 บรรทัด ขณะที่ v18 มี 886, line-webhook 445 ขณะที่ v37 มี 488)
@@ -36,6 +36,46 @@ Updated: 2026-11-23 (รอบ 2 · Claude)
 - LIFF button progress copy changed from `กำลังส่งคำสั่งซื้อ…` to `ระบบกำลังพาไปหน้าชำระเงิน…` in PR #28. This UI change is pending merge/deployment.
 - **Source-sync warning:** the live `create-order` v26 source was retrieved and used as the exact deployment baseline for v27. The corresponding source file was not found at the expected `supabase/functions/create-order/index.ts` path in the repository. Before any future deploy, first add/sync the live v27 source into the canonical repository path and compare it against production; do not deploy an older local copy.
 - Static post-deploy checks: customer pending push absent; staff notification remains; `create_liff_order` call remains; function status ACTIVE v27. No test order/payment was created.
+
+## รอบ 4 (2026-11-25) — แจ้งเตือนพนักงานทาง LINE OA ฝั่งพนักงาน เมื่อผลชำระเงินออก
+
+เจ้าของสั่ง: ให้ LINE OA ที่พนักงานใช้ลงเวลา (LIFF) แจ้งเตือนได้ด้วย **แต่ส่งเฉพาะคนที่เจ้าของอนุญาต**
+ขอบเขตรอบนี้ (เจ้าของเลือก): **เฉพาะเหตุการณ์ชำระเงินสำเร็จ / ไม่สำเร็จ** และต้องส่ง **ทันที**
+(ยังไม่ทำ: ลูกค้ากดสั่งออเดอร์ · ลูกค้ารอนาน · เหตุขัดข้อง)
+
+### คนละ OA กัน — จุดที่พลาดง่ายที่สุด
+| | OA ลูกค้า | OA พนักงาน |
+|---|---|---|
+| ทะเบียน | `public.line_channels` (repo นี้) | `backoffice.kv` ns `props` → `LINE_TOKEN` (ของ CMS) |
+| โทเคนใน Edge Function | `LINE_CHANNEL_ACCESS_TOKEN` | **`STAFF_LINE_TOKEN`** (ใหม่) |
+| ใช้ส่งอะไร | ยืนยันออเดอร์/ผลสลิปให้ลูกค้า | แจ้งพนักงานว่าเงินเข้า/ไม่เข้า |
+
+- **`STAFF_LINE_TOKEN` ต้องให้เจ้าของตั้งเองใน Supabase > Edge Functions > Secrets** (channel access token ของ OA พนักงาน จาก LINE Developers)
+  ห้าม copy ค่า `props.LINE_TOKEN` ของ CMS ออกมาวางไว้ที่อื่น — AGENTS.md ห้ามแสดง/คัดลอกคีย์ลับออก
+- **ไม่ตั้ง secret = ข้ามเงียบ** (`skipped: "no_token"`) ไม่ error ไม่กระทบการตรวจสลิป
+
+### ใครได้รับ — `public.cms_staff_notify` (view, migration `cms_staff_notify_view`)
+สำเนา SQL: `supabase/migrations/20261125_cms_staff_notify_view.sql`
+
+- เป็น **view อ่านอย่างเดียว** อ่านตรงจากชีต `ผู้ใช้ระบบ (Users)` ใน schema `backoffice` + `props.OWNER_PROFILE`
+  → เจ้าของติ๊กช่อง "แจ้งเตือน LINE" ในหลังร้าน **มีผลทันที** ไม่ต้องมี cron ซิงก์ ไม่ต้องแก้ Edge Function `backoffice`
+- CMS ยังเป็นเจ้าของข้อมูล 100% — ไม่มีตารางพนักงานซ้ำในฝั่งนี้ (ตรงตามกติกา "ห้ามแก้พนักงานฝั่ง Line-Order")
+- อ่านหัวตารางด้วย **ชื่อคอลัมน์** ไม่ใช่ลำดับ → แทรก/สลับคอลัมน์ในชีตแล้วไม่พัง แต่ **เปลี่ยนชื่อหัวคอลัมน์ = view คืน 0 แถว แจ้งเตือนเงียบ**
+- `grant select` ให้ `service_role` เท่านั้น (LINE user id ของพนักงานเป็นข้อมูลส่วนตัว)
+- คีย์เหตุการณ์: `pay` · `*` = รับทุกอย่าง · ตัวเลือกในหน้าเว็บอยู่ที่ `CMS/js/line-events-order.js` — **เปลี่ยนคีย์ต้องแก้ทั้งสองฝั่ง**
+
+### โค้ด
+`notifyStaff()` เพิ่มใน **ทั้ง 2 ฟังก์ชัน** (payment-portal v22, line-webhook v40) เพราะตรรกะตัดสินผลสลิปซ้ำกันอยู่แล้ว
+เรียกที่ 3 จุดผลลัพธ์: ผ่าน (✅) · ไม่ผ่าน (⚠️ เงินยังไม่เข้า ต้องตามลูกค้า) · รอร้านยืนยัน (🔎 ต้องมีคนกด ไม่งั้นหมดอายุ)
+
+- กลืน error ทุกกรณี — **การแจ้งเตือนห้ามทำให้การยืนยันเงินล้ม**
+- log บันทึกแค่ `cms_ref` ไม่บันทึก LINE user id
+- Push นับโควตาข้อความของ OA พนักงาน (reply ไม่นับ)
+
+### ยังต้องทำ (ฝั่งเจ้าของ)
+1. ตั้ง `STAFF_LINE_TOKEN` ใน Supabase > Edge Functions > Secrets
+2. ผูก LINE ของบัญชีเจ้าของกับ OA พนักงาน ("ขอรหัสผูก LINE" ในโปรไฟล์ตัวเอง) — ตอนนี้ `OWNER_PROFILE` ยังไม่มี `lineUserId`
+3. ติ๊ก "ชำระเงินลูกค้า สำเร็จ/ไม่สำเร็จ" ให้คนที่ต้องการรับ — ตอนนี้ยัง **ไม่มีใครติ๊ก** (view คืน 3 แถว แต่ `events` ว่างทั้งหมด)
 
 ## รอบ 3 (19:00) — ตัวตรวจซ้ำตรวจได้ครั้งเดียวแล้วค้าง + การ์ดกันออเดอร์ที่ยกเลิก
 **บั๊กที่เกิดจริง 23 พ.ย. 69 18:44–18:52** (order `B0001-261123114336-D9CA13`) — อ่านก่อนแก้ตัวตรวจซ้ำ
