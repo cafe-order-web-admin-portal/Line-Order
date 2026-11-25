@@ -151,6 +151,44 @@ async function pushLineText(branchId: string, lineUserId: string, text: string) 
   }
 }
 
+// แจ้งเตือนพนักงานทาง LINE OA ฝั่งพนักงาน (คนละ OA กับของลูกค้า)
+// ผู้รับ = คนที่เจ้าของติ๊กไว้ในหลังร้าน > ผู้ใช้ > "แจ้งเตือน LINE" (อ่านผ่าน view public.cms_staff_notify)
+// ไม่ตั้ง STAFF_LINE_TOKEN = ข้ามเงียบ ไม่ถือเป็นความผิดพลาด
+// กลืน error ทุกกรณี — การแจ้งเตือนห้ามทำให้การยืนยันเงินล้มเหลว
+// ไม่บันทึก LINE user id ลง log (ข้อมูลส่วนตัวพนักงาน) บันทึกแค่ cms_ref
+async function notifyStaff(eventKey: string, text: string) {
+  try {
+    const token = (Deno.env.get("STAFF_LINE_TOKEN") ?? "").trim();
+    if (!token) return { sent: 0, skipped: "no_token" };
+    const { data: rows, error } = await admin.from("cms_staff_notify")
+      .select("cms_ref,line_user_id,events,is_active").eq("is_active", true);
+    if (error) throw error;
+    const targets = (rows || []).filter((r: Record<string, any>) => {
+      const ev = Array.isArray(r.events) ? r.events.map((x: unknown) => String(x)) : [];
+      return ev.includes(eventKey) || ev.includes("*");
+    });
+    if (!targets.length) return { sent: 0, skipped: "no_subscriber" };
+    let sent = 0;
+    await Promise.all(targets.map(async (r: Record<string, any>) => {
+      try {
+        const res = await fetch("https://api.line.me/v2/bot/message/push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          body: JSON.stringify({ to: String(r.line_user_id), messages: [{ type: "text", text: text.slice(0, 4900) }] }),
+        });
+        if (res.ok) sent++;
+        else console.error("staff notify failed", { cms_ref: String(r.cms_ref), http_status: res.status });
+      } catch (_e) {
+        console.error("staff notify error", { cms_ref: String(r.cms_ref) });
+      }
+    }));
+    return { sent, of: targets.length };
+  } catch (e) {
+    console.error("staff notify lookup failed", String((e as Error)?.message || e).slice(0, 200));
+    return { sent: 0, skipped: "error" };
+  }
+}
+
 
 async function runAutoSlipVerification(tx: Record<string, any>, bytes: Uint8Array, mime: string) {
   const branchId = String(tx.branch_id ?? "");
@@ -336,7 +374,7 @@ async function runAutoSlipVerification(tx: Record<string, any>, bytes: Uint8Arra
   const nextStatus = passed ? "matched" : rejectionReason ? "rejected" : "needs_review";
   const note = passed
     ? "ตรวจสอบอัตโนมัติผ่าน EasySlip: ยอด " + verifiedAmount.toFixed(2) + " บาท / Receiver matched / Duplicate check passed"
-    : rejectionReason || reviewReason || ("ระบบตรวจสอบอัตโนมัติไม่สำเร็จ: " + transientReason);
+    : rejectionReason || reviewReason || ("[AUTO_RETRY] ระบบตรวจสอบอัตโนมัติยังไม่จบ รอตรวจซ้ำ: " + transientReason);
   const updates: Record<string, any> = {
     status: nextStatus, verification_note: note, verified_by: null, verified_at: now, updated_at: now,
     paid_amount: passed ? verifiedAmount : null,
@@ -375,11 +413,31 @@ async function runAutoSlipVerification(tx: Record<string, any>, bytes: Uint8Arra
       + "ยอด " + verifiedAmount.toFixed(2) + " บาท\n"
       + "ร้านกำลังเตรียมสินค้าให้ ขอบคุณครับ ☕";
     const pushed = await pushLineText(branchId, String(tx.customer_line_user_id ?? ""), paidText);
-    console.info("payment paid notice", { order_number: String(tx.order_number ?? ""), pushed });
+    const staff = await notifyStaff("pay",
+      "\u2705 \u0e25\u0e39\u0e01\u0e04\u0e49\u0e32\u0e0a\u0e33\u0e23\u0e30\u0e40\u0e07\u0e34\u0e19\u0e41\u0e25\u0e49\u0e27\n"
+      + "Order " + String(tx.order_number ?? "") + "\n"
+      + "\u0e22\u0e2d\u0e14 " + verifiedAmount.toFixed(2) + " \u0e1a\u0e32\u0e17\n"
+      + "\u0e23\u0e30\u0e1a\u0e1a\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e25\u0e34\u0e1b\u0e1c\u0e48\u0e32\u0e19\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34 \u0e44\u0e21\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e01\u0e14\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e0b\u0e49\u0e33");
+    console.info("payment paid notice", { order_number: String(tx.order_number ?? ""), pushed, staff });
     return { status: "matched", message: "ตรวจสอบสลิปสำเร็จ ระบบยืนยันการชำระเงินแล้ว", auto_verified: true };
   }
-  if (rejectionReason) return { status: "rejected", message: "สลิปไม่ผ่านการตรวจสอบ: " + rejectionReason + " กรุณาตรวจสอบและส่งสลิปที่ถูกต้อง", auto_verified: false };
-  if (reviewReason) return { status: "needs_review", message: "ระบบได้รับสลิปแล้วและยอดเงินตรงกับคำสั่งซื้อ · รอร้านกดยืนยันอีกครั้ง ไม่ต้องส่งสลิปใหม่", auto_verified: false };
+  if (rejectionReason) {
+    await notifyStaff("pay",
+      "\u26a0\ufe0f \u0e2a\u0e25\u0e34\u0e1b\u0e44\u0e21\u0e48\u0e1c\u0e48\u0e32\u0e19\u0e01\u0e32\u0e23\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\n"
+      + "Order " + String(tx.order_number ?? "") + "\n"
+      + "\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25: " + rejectionReason + "\n"
+      + "\u0e40\u0e07\u0e34\u0e19\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e40\u0e02\u0e49\u0e32 \u0e15\u0e49\u0e2d\u0e07\u0e15\u0e34\u0e14\u0e15\u0e48\u0e2d\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32");
+    return { status: "rejected", message: "สลิปไม่ผ่านการตรวจสอบ: " + rejectionReason + " กรุณาตรวจสอบและส่งสลิปที่ถูกต้อง", auto_verified: false };
+  }
+  if (reviewReason) {
+    await notifyStaff("pay",
+      "\ud83d\udd0e \u0e23\u0e2d\u0e23\u0e49\u0e32\u0e19\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e01\u0e32\u0e23\u0e0a\u0e33\u0e23\u0e30\u0e40\u0e07\u0e34\u0e19\n"
+      + "Order " + String(tx.order_number ?? "") + "\n"
+      + (Number.isFinite(verifiedAmount) ? "\u0e22\u0e2d\u0e14 " + verifiedAmount.toFixed(2) + " \u0e1a\u0e32\u0e17\n" : "")
+      + reviewReason + "\n"
+      + "\u0e40\u0e1b\u0e34\u0e14\u0e2b\u0e25\u0e31\u0e07\u0e23\u0e49\u0e32\u0e19 > QR Payment \u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e15\u0e23\u0e27\u0e08\u0e41\u0e25\u0e30\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19");
+    return { status: "needs_review", message: "ระบบได้รับสลิปแล้วและยอดเงินตรงกับคำสั่งซื้อ · รอร้านกดยืนยันอีกครั้ง ไม่ต้องส่งสลิปใหม่", auto_verified: false };
+  }
   return { status: "needs_review", message: transientReason.toUpperCase().includes("PENDING") || transientReason.includes("ประมวลผล") ? "ธนาคารยังประมวลผลรายการอยู่ ระบบเก็บสลิปไว้แล้ว กรุณารอสักครู่แล้วกดตรวจสอบอีกครั้ง โดยไม่ต้องส่งสลิปใหม่" : "ระบบตรวจสอบขัดข้องชั่วคราว ระบบเก็บสลิปไว้แล้ว กรุณาลองตรวจสอบอีกครั้งภายหลัง", auto_verified: false };
 }
 
@@ -820,8 +878,9 @@ Deno.serve(async (req: Request) => {
       const { data: authorized, error: cronErr } = await admin.rpc("verify_backoffice_cron_key", { p_key: String(body.k || "") });
       if (cronErr || authorized !== true) return reply(null, 403, { success: false, error: "cron_unauthorized" });
       const { data: candidates, error: listErr } = await admin.from("payment_transactions")
-        .select("*").eq("status", "needs_review")
-        .or("verification_note.ilike.%SLIP_PENDING%,verification_note.ilike.%TRANSACTION_PENDING%,verification_note.ilike.%BANK_PENDING%,verification_note.ilike.%SLIP_NOT_FOUND%,verification_note.ilike.%EasySlip connection%,verification_note.ilike.%timed out%")
+        .select("*,orders!inner(order_status)").eq("status", "needs_review")
+        .not("orders.order_status", "in", "(cancelled,completed)")
+        .or("verification_note.ilike.%AUTO_RETRY%,verification_note.ilike.%SLIP_PENDING%,verification_note.ilike.%TRANSACTION_PENDING%,verification_note.ilike.%BANK_PENDING%,verification_note.ilike.%SLIP_NOT_FOUND%,verification_note.ilike.%EasySlip connection%,verification_note.ilike.%timed out%")
         .lt("updated_at", new Date(Date.now() - 45000).toISOString())
         .order("updated_at", { ascending: true }).limit(20);
       if (listErr) throw listErr;
@@ -838,6 +897,26 @@ Deno.serve(async (req: Request) => {
           .eq("id", candidate.id).eq("status", "needs_review").select("*").maybeSingle();
         if (claimErr) throw claimErr;
         if (!claimed) continue;
+        // ออเดอร์อาจถูกยกเลิกระหว่างที่ธนาคารยังไม่เผยแพร่รายการ
+        // ห้ามบันทึกว่าได้รับเงินและห้ามส่ง LINE บอกลูกค้าให้กับออเดอร์ที่ยกเลิกไปแล้ว
+        const { data: orderRow } = await admin.from("orders")
+          .select("order_status").eq("id", claimed.order_id).maybeSingle();
+        const orderStatus = String(orderRow?.order_status ?? "");
+        if (["cancelled", "completed"].includes(orderStatus)) {
+          const stopNote = "ออเดอร์" + (orderStatus === "cancelled" ? "ถูกยกเลิก" : "ปิดงานแล้ว")
+            + "ก่อนระบบตรวจสลิปเสร็จ · ระบบหยุดตรวจและไม่บันทึกรับเงิน";
+          await admin.from("payment_transactions").update({
+            status: "expired", verification_note: stopNote, paid_amount: null,
+            updated_at: new Date().toISOString(),
+          }).eq("id", claimed.id).eq("status", "submitted");
+          await admin.from("payment_audit_logs").insert({
+            transaction_id: claimed.id, order_id: claimed.order_id, branch_id: claimed.branch_id,
+            actor_ref: "system:easyslip-retry", action_key: "payment_expired_order_cancelled",
+            before_state: { status: "needs_review" },
+            after_state: { status: "expired", order_status: orderStatus, note: stopNote },
+          });
+          continue;
+        }
         checked++;
         try {
           if (!claimed.slip_path) throw new Error("missing_slip_path");
@@ -851,7 +930,7 @@ Deno.serve(async (req: Request) => {
           else if (result.status === "needs_review") stillPending++;
         } catch (e) {
           errors++;
-          const note = "Background retry error: " + String((e as Error).message || e).slice(0, 250);
+          const note = "[AUTO_RETRY] Background retry error: " + String((e as Error).message || e).slice(0, 250);
           await admin.from("payment_transactions").update({ status: "needs_review", verification_note: note, updated_at: new Date().toISOString() })
             .eq("id", claimed.id).eq("status", "submitted");
           await admin.from("payment_audit_logs").insert({
